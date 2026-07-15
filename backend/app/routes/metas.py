@@ -2,10 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.meta import Meta
+from app.models.transacao import Transacao, TipoTransacao
 from app.schemas.meta import MetaCreate, MetaResponse
-from typing import List
+from typing import List, Optional
+from datetime import date
+from pydantic import BaseModel
 
 router = APIRouter()
+
+class ResgateRequest(BaseModel):
+    meta_id: int
+    acao: str  # "resgatar" | "transferir" | "descartar" | "manter"
+    meta_destino_id: Optional[int] = None
 
 @router.post("/", response_model=MetaResponse)
 def criar_meta(meta: MetaCreate, db: Session = Depends(get_db)):
@@ -16,28 +24,101 @@ def criar_meta(meta: MetaCreate, db: Session = Depends(get_db)):
     return db_meta
 
 @router.get("/", response_model=List[MetaResponse])
-def listar_metas(db: Session = Depends(get_db)):
-    return db.query(Meta).all()
+def listar_metas(status: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Meta)
+    if status:
+        query = query.filter(Meta.status == status)
+    return query.all()
 
-@router.put("/{id}/atualizar-valor")
-def atualizar_valor_meta(id: int, valor: float, db: Session = Depends(get_db)):
+@router.get("/patrimonio")
+def patrimonio_total(db: Session = Depends(get_db)):
+    metas = db.query(Meta).filter(Meta.status.in_(["ativa", "pausada", "concluida"])).all()
+    total = sum(m.valor_atual for m in metas)
+    return {"patrimonio_total": round(total, 2), "metas": len(metas)}
+
+@router.put("/{id}/pausar")
+def pausar_meta(id: int, db: Session = Depends(get_db)):
     meta = db.query(Meta).filter(Meta.id == id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Meta nao encontrada")
-    
-    meta.valor_atual = valor
-    if valor >= meta.valor_alvo:
-        meta.concluida = True
-    
+    meta.status = "pausada" if meta.status == "ativa" else "ativa"
     db.commit()
     db.refresh(meta)
     return meta
+
+@router.post("/resgatar")
+def resgatar_meta(req: ResgateRequest, db: Session = Depends(get_db)):
+    meta = db.query(Meta).filter(Meta.id == req.meta_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Meta nao encontrada")
+
+    valor = meta.valor_atual
+
+    if req.acao == "resgatar":
+        # Registra receita de resgate
+        receita = Transacao(
+            descricao=f"Resgate de meta — {meta.titulo}",
+            valor=valor,
+            tipo=TipoTransacao.receita,
+            subtipo=None,
+            categoria="Resgate de meta",
+            data=date.today(),
+            mes_referencia=date.today().strftime("%Y-%m"),
+            recorrente=False,
+        )
+        db.add(receita)
+        meta.status = "resgatada"
+        meta.valor_atual = 0.0
+        meta.data_encerramento = date.today()
+        meta.motivo_encerramento = "resgatada"
+
+    elif req.acao == "transferir" and req.meta_destino_id:
+        meta_destino = db.query(Meta).filter(Meta.id == req.meta_destino_id).first()
+        if not meta_destino:
+            raise HTTPException(status_code=404, detail="Meta destino nao encontrada")
+        meta_destino.valor_atual += valor
+        if meta_destino.valor_atual >= meta_destino.valor_alvo:
+            meta_destino.concluida = True
+            meta_destino.status = "concluida"
+            meta_destino.data_conclusao = date.today()
+        meta.status = "encerrada"
+        meta.valor_atual = 0.0
+        meta.data_encerramento = date.today()
+        meta.motivo_encerramento = f"transferida para meta {req.meta_destino_id}"
+
+    elif req.acao == "descartar":
+        meta.status = "encerrada"
+        meta.valor_atual = 0.0
+        meta.data_encerramento = date.today()
+        meta.motivo_encerramento = "descartada"
+
+    elif req.acao == "manter":
+        meta.status = "concluida"
+        meta.data_conclusao = date.today()
+
+    db.commit()
+    db.refresh(meta)
+    return meta
+
+@router.put("/{id}", response_model=MetaResponse)
+def atualizar_meta(id: int, meta: MetaCreate, db: Session = Depends(get_db)):
+    db_meta = db.query(Meta).filter(Meta.id == id).first()
+    if not db_meta:
+        raise HTTPException(status_code=404, detail="Meta nao encontrada")
+    for key, value in meta.model_dump().items():
+        setattr(db_meta, key, value)
+    db.commit()
+    db.refresh(db_meta)
+    return db_meta
 
 @router.delete("/{id}")
 def deletar_meta(id: int, db: Session = Depends(get_db)):
     meta = db.query(Meta).filter(Meta.id == id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Meta nao encontrada")
-    db.delete(meta)
+    meta.status = "encerrada"
+    meta.data_encerramento = date.today()
+    meta.motivo_encerramento = "removida pelo usuario"
+    meta.valor_atual = 0.0
     db.commit()
-    return {"mensagem": "Meta deletada com sucesso"}
+    return {"mensagem": "Meta encerrada com sucesso"}

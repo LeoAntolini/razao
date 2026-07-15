@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routes import transacoes, metas
+from app.models import transacao, meta, gasto_fixo
+from app.routes import transacoes, metas, gastos_fixos
 
-app = FastAPI(title="Razao API", version="1.0.0")
+app = FastAPI(title="Razao API", version="2.0.0")
 
-# Permite o frontend conversar com o backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,13 +14,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Cria as tabelas no banco automaticamente
 Base.metadata.create_all(bind=engine)
 
-# Rotas
 app.include_router(transacoes.router, prefix="/transacoes", tags=["Transacoes"])
 app.include_router(metas.router, prefix="/metas", tags=["Metas"])
+app.include_router(gastos_fixos.router, prefix="/gastos-fixos", tags=["Gastos Fixos"])
 
 @app.get("/")
 def root():
-    return {"status": "Razao API funcionando!"}
+    return {"status": "Razao API v2.0 funcionando!"}
