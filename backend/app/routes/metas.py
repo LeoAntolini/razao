@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models.meta import Meta
 from app.models.transacao import Transacao, TipoTransacao
 from app.schemas.meta import MetaCreate, MetaResponse
+from app.auth import get_usuario_atual
 from typing import List, Optional
 from datetime import date
 from pydantic import BaseModel
@@ -12,33 +13,33 @@ router = APIRouter()
 
 class ResgateRequest(BaseModel):
     meta_id: int
-    acao: str  # "resgatar" | "transferir" | "descartar" | "manter"
+    acao: str
     meta_destino_id: Optional[int] = None
 
 @router.post("/", response_model=MetaResponse)
-def criar_meta(meta: MetaCreate, db: Session = Depends(get_db)):
-    db_meta = Meta(**meta.model_dump())
+def criar_meta(meta: MetaCreate, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    db_meta = Meta(**meta.model_dump(), usuario_id=usuario.id)
     db.add(db_meta)
     db.commit()
     db.refresh(db_meta)
     return db_meta
 
 @router.get("/", response_model=List[MetaResponse])
-def listar_metas(status: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(Meta)
+def listar_metas(status: Optional[str] = None, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    query = db.query(Meta).filter(Meta.usuario_id == usuario.id)
     if status:
         query = query.filter(Meta.status == status)
     return query.all()
 
 @router.get("/patrimonio")
-def patrimonio_total(db: Session = Depends(get_db)):
-    metas = db.query(Meta).filter(Meta.status.in_(["ativa", "pausada", "concluida"])).all()
+def patrimonio_total(db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    metas = db.query(Meta).filter(Meta.usuario_id == usuario.id, Meta.status.in_(["ativa", "pausada", "concluida"])).all()
     total = sum(m.valor_atual for m in metas)
     return {"patrimonio_total": round(total, 2), "metas": len(metas)}
 
 @router.put("/{id}/pausar")
-def pausar_meta(id: int, db: Session = Depends(get_db)):
-    meta = db.query(Meta).filter(Meta.id == id).first()
+def pausar_meta(id: int, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    meta = db.query(Meta).filter(Meta.id == id, Meta.usuario_id == usuario.id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Meta nao encontrada")
     meta.status = "pausada" if meta.status == "ativa" else "ativa"
@@ -47,24 +48,23 @@ def pausar_meta(id: int, db: Session = Depends(get_db)):
     return meta
 
 @router.post("/resgatar")
-def resgatar_meta(req: ResgateRequest, db: Session = Depends(get_db)):
-    meta = db.query(Meta).filter(Meta.id == req.meta_id).first()
+def resgatar_meta(req: ResgateRequest, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    meta = db.query(Meta).filter(Meta.id == req.meta_id, Meta.usuario_id == usuario.id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Meta nao encontrada")
 
     valor = meta.valor_atual
 
     if req.acao == "resgatar":
-        # Registra receita de resgate
         receita = Transacao(
             descricao=f"Resgate de meta — {meta.titulo}",
             valor=valor,
             tipo=TipoTransacao.receita,
-            subtipo=None,
             categoria="Resgate de meta",
             data=date.today(),
             mes_referencia=date.today().strftime("%Y-%m"),
             recorrente=False,
+            usuario_id=usuario.id,
         )
         db.add(receita)
         meta.status = "resgatada"
@@ -73,7 +73,7 @@ def resgatar_meta(req: ResgateRequest, db: Session = Depends(get_db)):
         meta.motivo_encerramento = "resgatada"
 
     elif req.acao == "transferir" and req.meta_destino_id:
-        meta_destino = db.query(Meta).filter(Meta.id == req.meta_destino_id).first()
+        meta_destino = db.query(Meta).filter(Meta.id == req.meta_destino_id, Meta.usuario_id == usuario.id).first()
         if not meta_destino:
             raise HTTPException(status_code=404, detail="Meta destino nao encontrada")
         meta_destino.valor_atual += valor
@@ -101,8 +101,8 @@ def resgatar_meta(req: ResgateRequest, db: Session = Depends(get_db)):
     return meta
 
 @router.put("/{id}", response_model=MetaResponse)
-def atualizar_meta(id: int, meta: MetaCreate, db: Session = Depends(get_db)):
-    db_meta = db.query(Meta).filter(Meta.id == id).first()
+def atualizar_meta(id: int, meta: MetaCreate, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    db_meta = db.query(Meta).filter(Meta.id == id, Meta.usuario_id == usuario.id).first()
     if not db_meta:
         raise HTTPException(status_code=404, detail="Meta nao encontrada")
     for key, value in meta.model_dump().items():
@@ -112,8 +112,8 @@ def atualizar_meta(id: int, meta: MetaCreate, db: Session = Depends(get_db)):
     return db_meta
 
 @router.delete("/{id}")
-def deletar_meta(id: int, db: Session = Depends(get_db)):
-    meta = db.query(Meta).filter(Meta.id == id).first()
+def deletar_meta(id: int, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    meta = db.query(Meta).filter(Meta.id == id, Meta.usuario_id == usuario.id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Meta nao encontrada")
     meta.status = "encerrada"
