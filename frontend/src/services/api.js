@@ -2,7 +2,7 @@ import axios from 'axios'
 import { getToken, logout } from './auth'
 
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000'
+  baseURL: 'https://razao-backend.onrender.com'
 })
 
 // Adiciona token em todas as requisições
