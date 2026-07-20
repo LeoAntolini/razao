@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, Boolean
+from sqlalchemy import Column, Integer, String, Float, Date, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -16,5 +16,6 @@ class Meta(Base):
     data_conclusao = Column(Date, nullable=True)
     data_encerramento = Column(Date, nullable=True)
     motivo_encerramento = Column(String, nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     aportes = relationship("Transacao", back_populates="meta")

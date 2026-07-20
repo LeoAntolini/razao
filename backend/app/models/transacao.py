@@ -8,19 +8,6 @@ class TipoTransacao(str, enum.Enum):
     despesa = "despesa"
     investimento = "investimento"
 
-class SubtipoTransacao(str, enum.Enum):
-    # Subtipos de despesa
-    fixa = "fixa"
-    fixa_parcelada = "fixa_parcelada"
-    fixa_com_prazo = "fixa_com_prazo"
-    variavel = "variavel"
-    sazonal = "sazonal"
-    # Subtipos de receita
-    salario = "salario"
-    freelance = "freelance"
-    dividendos = "dividendos"
-    outros = "outros"
-
 class Transacao(Base):
     __tablename__ = "transacoes"
 
@@ -37,5 +24,6 @@ class Transacao(Base):
     parcela_atual = Column(Integer, nullable=True)
     recorrente = Column(Boolean, default=False)
     observacao = Column(String, nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     meta = relationship("Meta", back_populates="aportes")
