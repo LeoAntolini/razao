@@ -206,6 +206,38 @@ def evolucao_patrimonio(db: Session = Depends(get_db), usuario=Depends(get_usuar
 
     return resultado
 
+@router.put("/{id}", response_model=TransacaoResponse)
+def atualizar_transacao(id: int, transacao: TransacaoCreate, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    db_transacao = db.query(Transacao).filter(Transacao.id == id, Transacao.usuario_id == usuario.id).first()
+    if not db_transacao:
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada")
+
+    # Se era investimento com meta, reverte o valor antigo
+    if db_transacao.tipo == TipoTransacao.investimento and db_transacao.meta_id:
+        meta = db.query(Meta).filter(Meta.id == db_transacao.meta_id).first()
+        if meta:
+            meta.valor_atual = max(0, meta.valor_atual - db_transacao.valor)
+            meta.concluida = meta.valor_atual >= meta.valor_alvo
+
+    # Atualiza os campos
+    for key, value in transacao.model_dump().items():
+        setattr(db_transacao, key, value)
+    db_transacao.mes_referencia = transacao.data.strftime("%Y-%m")
+    db_transacao.usuario_id = usuario.id
+
+    # Se novo tipo é investimento com meta, aplica novo valor
+    if transacao.tipo == TipoTransacao.investimento and transacao.meta_id:
+        meta = db.query(Meta).filter(Meta.id == transacao.meta_id).first()
+        if meta:
+            meta.valor_atual += transacao.valor
+            if meta.valor_atual >= meta.valor_alvo:
+                meta.concluida = True
+                meta.status = "concluida"
+
+    db.commit()
+    db.refresh(db_transacao)
+    return db_transacao
+
 @router.delete("/{id}")
 def deletar_transacao(id: int, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
     transacao = db.query(Transacao).filter(Transacao.id == id, Transacao.usuario_id == usuario.id).first()
