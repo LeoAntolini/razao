@@ -3,6 +3,8 @@ import { estaLogado } from './services/auth'
 import Dashboard from './pages/Dashboard'
 import Transacoes from './pages/Transacoes'
 import Metas from './pages/Metas'
+import Acoes from './pages/Acoes'
+import RendaFixa from './pages/RendaFixa'
 import Login from './pages/Login'
 import Cadastro from './pages/Cadastro'
 import Navbar from './components/Navbar'
@@ -28,6 +30,8 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/transacoes" element={<Transacoes />} />
               <Route path="/metas" element={<Metas />} />
+              <Route path="/acoes" element={<Acoes />} />
+              <Route path="/renda-fixa" element={<RendaFixa />} />
             </Routes>
           </RotaProtegida>
         } />

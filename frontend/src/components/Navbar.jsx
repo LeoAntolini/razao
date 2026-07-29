@@ -14,6 +14,8 @@ function Navbar() {
     { path: '/', label: 'Dashboard' },
     { path: '/transacoes', label: 'Transações' },
     { path: '/metas', label: 'Metas' },
+    { path: '/acoes', label: 'Carteira' },
+    { path: '/renda-fixa', label: 'Renda Fixa' },
   ]
 
   const sair = () => {
@@ -30,7 +32,6 @@ function Navbar() {
         justifyContent: 'space-between', height: '64px',
         position: 'sticky', top: 0, zIndex: 100,
       }}>
-        {/* Logo */}
         <span style={{
           background: 'linear-gradient(135deg, #A78BFA, #7C3AED)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
@@ -39,16 +40,15 @@ function Navbar() {
           Razão
         </span>
 
-        {/* Desktop — links normais */}
         {!isMobile && (
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '4px' }}>
             {links.map(link => {
               const active = location.pathname === link.path
               return (
                 <Link key={link.path} to={link.path} style={{
                   color: active ? '#A78BFA' : '#6B6B8A',
                   textDecoration: 'none', fontWeight: active ? '600' : '400',
-                  fontSize: '14px', padding: '8px 16px', borderRadius: '8px',
+                  fontSize: '14px', padding: '8px 14px', borderRadius: '8px',
                   background: active ? 'rgba(167,139,250,0.1)' : 'transparent',
                 }}>
                   {link.label}
@@ -58,7 +58,6 @@ function Navbar() {
           </div>
         )}
 
-        {/* Desktop — usuário e logout */}
         {!isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {usuario && (
@@ -71,38 +70,34 @@ function Navbar() {
               cursor: 'pointer', fontSize: '13px', padding: '7px 14px', borderRadius: '8px',
             }}
               onMouseEnter={e => { e.target.style.borderColor = '#F87171'; e.target.style.color = '#F87171' }}
-              onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.color = '#6B6B8A' }}
-            >
+              onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.color = '#6B6B8A' }}>
               Sair
             </button>
           </div>
         )}
 
-        {/* Mobile — botão hamburguer */}
         {isMobile && (
           <button onClick={() => setMenuAberto(!menuAberto)} style={{
             background: 'none', border: 'none', color: '#A78BFA',
             cursor: 'pointer', fontSize: '24px', padding: '4px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {menuAberto ? '✕' : '☰'}
           </button>
         )}
       </nav>
 
-      {/* Mobile — menu dropdown */}
       {isMobile && menuAberto && (
         <div style={{
           position: 'fixed', top: '64px', left: 0, right: 0, bottom: 0,
           background: '#13131A', zIndex: 99, padding: '24px',
-          borderTop: '1px solid #1E1E2E', display: 'flex', flexDirection: 'column', gap: '8px'
+          borderTop: '1px solid #1E1E2E', display: 'flex', flexDirection: 'column', gap: '8px',
+          overflowY: 'auto'
         }}>
           {usuario && (
             <div style={{ fontSize: '14px', color: '#A0A0C0', padding: '12px 0', borderBottom: '1px solid #1E1E2E', marginBottom: '8px' }}>
               Olá, <span style={{ color: '#E8E8F0', fontWeight: '600' }}>{usuario.nome.split(' ')[0]}</span>
             </div>
           )}
-
           {links.map(link => {
             const active = location.pathname === link.path
             return (
@@ -117,7 +112,6 @@ function Navbar() {
               </Link>
             )
           })}
-
           <button onClick={sair} style={{
             marginTop: 'auto', background: 'rgba(248,113,113,0.1)',
             border: '1px solid rgba(248,113,113,0.3)', color: '#F87171',
