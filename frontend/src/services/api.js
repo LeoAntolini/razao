@@ -5,7 +5,6 @@ const api = axios.create({
   baseURL: 'https://razao-backend.onrender.com'
 })
 
-// Adiciona token em todas as requisições
 api.interceptors.request.use(config => {
   const token = getToken()
   if (token) {
@@ -14,7 +13,6 @@ api.interceptors.request.use(config => {
   return config
 })
 
-// Se token expirar, faz logout automático
 api.interceptors.response.use(
   response => response,
   error => {

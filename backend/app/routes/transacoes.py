@@ -238,6 +238,39 @@ def atualizar_transacao(id: int, transacao: TransacaoCreate, db: Session = Depen
     db.refresh(db_transacao)
     return db_transacao
 
+@router.get("/patrimonio-completo")
+def patrimonio_completo(db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    from app.models.acao import Acao
+    from app.models.renda_fixa import RendaFixa
+    from app.models.meta import Meta
+
+    # Metas
+    metas = db.query(Meta).filter(Meta.usuario_id == usuario.id, Meta.status.in_(["ativa", "pausada", "concluida"])).all()
+    total_metas = sum(m.valor_atual for m in metas)
+
+    # Ações
+    acoes = db.query(Acao).filter(Acao.usuario_id == usuario.id).all()
+    carteira = {}
+    for a in acoes:
+        t = a.ticker
+        if t not in carteira:
+            carteira[t] = 0
+        carteira[t] += a.quantidade * a.preco_pago
+    total_acoes = sum(carteira.values())
+
+    # Renda fixa
+    renda_fixa = db.query(RendaFixa).filter(RendaFixa.usuario_id == usuario.id).all()
+    total_rf = sum(r.valor_investido for r in renda_fixa)
+
+    total_geral = total_metas + total_acoes + total_rf
+
+    return {
+        "total_geral": round(total_geral, 2),
+        "metas": round(total_metas, 2),
+        "acoes": round(total_acoes, 2),
+        "renda_fixa": round(total_rf, 2),
+    }
+
 @router.delete("/{id}")
 def deletar_transacao(id: int, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
     transacao = db.query(Transacao).filter(Transacao.id == id, Transacao.usuario_id == usuario.id).first()

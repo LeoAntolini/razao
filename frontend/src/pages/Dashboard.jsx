@@ -29,7 +29,6 @@ function ModalDetalhes({ titulo, transacoes, onClose }) {
   const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
   const corTipo = { receita: '#34D399', despesa: '#F87171', investimento: '#A78BFA' }
   const bgTipo = { receita: 'rgba(52,211,153,0.1)', despesa: 'rgba(248,113,113,0.1)', investimento: 'rgba(167,139,250,0.1)' }
-
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
       <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '20px', padding: '24px', maxWidth: '560px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
@@ -41,7 +40,7 @@ function ModalDetalhes({ titulo, transacoes, onClose }) {
           {transacoes.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#6B6B8A', padding: '32px' }}>Nenhum lançamento encontrado</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
               {transacoes.map((t, i) => (
                 <div key={t.id} style={{ padding: '12px 0', borderBottom: i < transacoes.length - 1 ? '1px solid #1E1E2E' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                   <div style={{ flex: 1 }}>
@@ -77,7 +76,6 @@ function ModalAlocacao({ pct, onClose, onSalvar }) {
   const [form, setForm] = useState({ ...pct })
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
-
   const total = parseFloat(form.pct_investimento || 0) + parseFloat(form.pct_lazer || 0) + parseFloat(form.pct_gastos || 0)
 
   const salvar = async () => {
@@ -100,25 +98,21 @@ function ModalAlocacao({ pct, onClose, onSalvar }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6B6B8A', cursor: 'pointer', fontSize: '20px' }}>✕</button>
         </div>
         <p style={{ fontSize: '13px', color: '#6B6B8A', marginBottom: '24px' }}>
-          Defina como deseja dividir o saldo livre do mês. Os percentuais devem somar 100%.
+          Defina como deseja dividir o saldo livre. Os percentuais devem somar 100%.
         </p>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
           {[
-            { key: 'pct_investimento', label: '💰 Investimento', cor: '#34D399', tooltip: 'Percentual do saldo livre destinado a investimentos.' },
-            { key: 'pct_lazer', label: '🎉 Lazer', cor: '#FBBF24', tooltip: 'Percentual para gastos com lazer e bem-estar.' },
-            { key: 'pct_gastos', label: '🛒 Gastos pessoais', cor: '#F87171', tooltip: 'Percentual para compras e gastos variáveis pessoais.' },
+            { key: 'pct_investimento', label: '💰 Investimento', cor: '#34D399' },
+            { key: 'pct_lazer', label: '🎉 Lazer', cor: '#FBBF24' },
+            { key: 'pct_gastos', label: '🛒 Gastos pessoais', cor: '#F87171' },
           ].map(item => (
             <div key={item.key}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label style={{ fontSize: '14px', color: '#E8E8F0', fontWeight: '500' }}>{item.label}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="number" min="0" max="100"
-                    value={form[item.key]}
+                  <input type="number" min="0" max="100" value={form[item.key]}
                     onChange={e => setForm({ ...form, [item.key]: e.target.value })}
-                    style={{ width: '70px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #2D2D42', background: '#0F0F14', color: item.cor, fontWeight: '700', fontSize: '16px', textAlign: 'center' }}
-                  />
+                    style={{ width: '70px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #2D2D42', background: '#0F0F14', color: item.cor, fontWeight: '700', fontSize: '16px', textAlign: 'center' }} />
                   <span style={{ color: item.cor, fontWeight: '700' }}>%</span>
                 </div>
               </div>
@@ -128,18 +122,16 @@ function ModalAlocacao({ pct, onClose, onSalvar }) {
             </div>
           ))}
         </div>
-
         <div style={{ textAlign: 'center', marginBottom: '16px' }}>
           <span style={{ fontSize: '14px', fontWeight: '700', color: Math.round(total) === 100 ? '#34D399' : '#F87171' }}>
             Total: {total.toFixed(0)}% {Math.round(total) === 100 ? '✓' : `(faltam ${(100 - total).toFixed(0)}%)`}
           </span>
         </div>
-
         {erro && <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '8px', padding: '10px', marginBottom: '16px', fontSize: '13px', color: '#F87171', textAlign: 'center' }}>{erro}</div>}
-
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={onClose} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #2D2D42', background: 'none', color: '#6B6B8A', cursor: 'pointer' }}>Cancelar</button>
-          <button onClick={salvar} disabled={loading || Math.round(total) !== 100} style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', background: Math.round(total) === 100 ? 'linear-gradient(135deg, #7C3AED, #A78BFA)' : '#1E1E2E', color: Math.round(total) === 100 ? '#fff' : '#6B6B8A', fontWeight: '600', cursor: Math.round(total) === 100 ? 'pointer' : 'not-allowed' }}>
+          <button onClick={salvar} disabled={loading || Math.round(total) !== 100}
+            style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', background: Math.round(total) === 100 ? 'linear-gradient(135deg, #7C3AED, #A78BFA)' : '#1E1E2E', color: Math.round(total) === 100 ? '#fff' : '#6B6B8A', fontWeight: '600', cursor: Math.round(total) === 100 ? 'pointer' : 'not-allowed' }}>
             {loading ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
@@ -219,7 +211,7 @@ function Dashboard() {
   const [resumo, setResumo] = useState(null)
   const [metas, setMetas] = useState([])
   const [patrimonio, setPatrimonio] = useState([])
-  const [patrimonioTotal, setPatrimonioTotal] = useState(null)
+  const [patrimonioCompleto, setPatrimonioCompleto] = useState(null)
   const [todasTransacoes, setTodasTransacoes] = useState([])
   const [periodo, setPeriodo] = useState('6')
   const [modalMeta, setModalMeta] = useState(null)
@@ -235,7 +227,7 @@ function Dashboard() {
     api.get(`/transacoes/resumo?mes=${mes}&ano=${ano}`).then(r => setResumo(r.data))
     api.get('/metas').then(r => setMetas(r.data))
     api.get('/transacoes/patrimonio').then(r => setPatrimonio(r.data))
-    api.get('/metas/patrimonio').then(r => setPatrimonioTotal(r.data))
+    api.get('/transacoes/patrimonio-completo').then(r => setPatrimonioCompleto(r.data))
     api.get(`/transacoes?mes=${mes}&ano=${ano}`).then(r => setTodasTransacoes(r.data))
     api.get('/preferencias').then(r => setPct(r.data))
   }
@@ -259,7 +251,7 @@ function Dashboard() {
   }
 
   const abrirDetalhesSaldo = () => {
-    setModalDetalhes({ titulo: 'Saldo livre — detalhamento', transacoes: todasTransacoes })
+    setModalDetalhes({ titulo: 'Todos os lançamentos do mês', transacoes: todasTransacoes })
   }
 
   const saldoLivre = resumo?.saldo_livre ?? 0
@@ -290,7 +282,7 @@ function Dashboard() {
 
       <BannerMetaConcluida metas={metas} onResgatar={setModalMeta} />
 
-      {/* Cards clicáveis */}
+      {/* Cards principais */}
       <div style={{ display: 'grid', gridTemplateColumns: colsCards, gap: '12px', marginBottom: '16px' }}>
         {[
           { label: 'Receitas do mês', valor: resumo?.receitas, cor: '#34D399', bg: 'rgba(52,211,153,0.08)', border: 'rgba(52,211,153,0.15)', tooltip: 'Tudo que entrou de dinheiro este mês.', onClick: () => abrirDetalhes('receita', 'Receitas do mês') },
@@ -298,34 +290,49 @@ function Dashboard() {
           { label: 'Investido', valor: resumo?.investimentos, cor: '#A78BFA', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.15)', tooltip: 'Valor aportado nas metas este mês.', onClick: () => abrirDetalhes('investimento', 'Investimentos do mês') },
           { label: 'Saldo livre', valor: resumo?.saldo_livre, cor: '#FBBF24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.15)', tooltip: 'O que sobrou após despesas e investimentos.', onClick: abrirDetalhesSaldo },
         ].map(card => (
-          <div key={card.label} onClick={card.onClick} style={{ background: card.bg, border: `1px solid ${card.border}`, borderRadius: '16px', padding: '16px', cursor: 'pointer', transition: 'transform 0.15s, opacity 0.15s' }}
+          <div key={card.label} onClick={card.onClick} style={{ background: card.bg, border: `1px solid ${card.border}`, borderRadius: '16px', padding: '16px', cursor: 'pointer', transition: 'opacity 0.15s' }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
             onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
             <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', display: 'flex', alignItems: 'center' }}>
               {card.label} <InfoTooltip texto={card.tooltip} />
             </div>
-            <div style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '700', color: card.cor }}>
-              {fmt(card.valor)}
-            </div>
+            <div style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '700', color: card.cor }}>{fmt(card.valor)}</div>
             <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '6px' }}>Clique para detalhes →</div>
           </div>
         ))}
       </div>
 
-      {/* Patrimônio total */}
-      {patrimonioTotal && (
-        <div style={{ background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)', borderRadius: '16px', padding: '16px 20px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
-              Patrimônio total <InfoTooltip texto="Soma de tudo acumulado nas metas ativas, pausadas e concluídas." />
+      {/* Patrimônio completo */}
+      {patrimonioCompleto && (
+        <div style={{ background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)', borderRadius: '16px', padding: '16px 20px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
+                Patrimônio total <InfoTooltip texto="Soma de todos seus investimentos: metas, ações/FIIs e renda fixa." />
+              </div>
+              <div style={{ fontSize: isMobile ? '26px' : '34px', fontWeight: '800', color: '#A78BFA', letterSpacing: '-1px' }}>
+                {fmt(patrimonioCompleto.total_geral)}
+              </div>
             </div>
-            <div style={{ fontSize: isMobile ? '24px' : '30px', fontWeight: '800', color: '#A78BFA', letterSpacing: '-1px' }}>
-              {fmt(patrimonioTotal.patrimonio_total)}
-            </div>
+            {resumo?.investimentos > 0 && (
+              <div style={{ fontSize: '13px', color: '#34D399', fontWeight: '600' }}>
+                + {fmt(resumo.investimentos)} este mês
+              </div>
+            )}
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '12px', color: '#6B6B8A' }}>{patrimonioTotal.metas} meta(s) ativa(s)</div>
-            {resumo?.investimentos > 0 && <div style={{ fontSize: '13px', color: '#34D399', fontWeight: '600' }}>+ {fmt(resumo.investimentos)} este mês</div>}
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '10px' }}>
+            {[
+              { label: 'Metas', valor: patrimonioCompleto.metas, cor: '#A78BFA', bg: 'rgba(167,139,250,0.08)', tooltip: 'Soma acumulada nas metas ativas, pausadas e concluídas.' },
+              { label: 'Ações / FIIs / ETFs', valor: patrimonioCompleto.acoes, cor: '#FBBF24', bg: 'rgba(251,191,36,0.08)', tooltip: 'Total investido em renda variável (preço de custo).' },
+              { label: 'Renda Fixa', valor: patrimonioCompleto.renda_fixa, cor: '#34D399', bg: 'rgba(52,211,153,0.08)', tooltip: 'Total aplicado em CDBs, Tesouro, LCI, LCA e outros.' },
+            ].map(item => (
+              <div key={item.label} style={{ background: item.bg, borderRadius: '10px', padding: '12px 14px' }}>
+                <div style={{ fontSize: '11px', color: '#6B6B8A', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
+                  {item.label} <InfoTooltip texto={item.tooltip} />
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: item.cor }}>{fmt(item.valor)}</div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -362,7 +369,7 @@ function Dashboard() {
         <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center' }}>
-              Patrimônio <InfoTooltip texto="Aportes acumulados ao longo do tempo." />
+              Evolução do patrimônio <InfoTooltip texto="Aportes acumulados nas metas ao longo do tempo." />
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
               {['3', '6', '12'].map(p => (
@@ -401,7 +408,6 @@ function Dashboard() {
               ⚙️ Personalizar
             </button>
           </div>
-
           {!resumo || resumo.saldo_livre <= 0 ? (
             <div style={{ color: '#6B6B8A', fontSize: '13px' }}>
               {!resumo ? 'Carregando...' : 'Sem saldo livre. Lance suas receitas para ver a sugestão.'}
