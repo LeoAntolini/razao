@@ -5,6 +5,7 @@ import Transacoes from './pages/Transacoes'
 import Metas from './pages/Metas'
 import Acoes from './pages/Acoes'
 import RendaFixa from './pages/RendaFixa'
+import ImpostoRenda from './pages/ImpostoRenda'
 import Login from './pages/Login'
 import Cadastro from './pages/Cadastro'
 import Navbar from './components/Navbar'
@@ -32,6 +33,7 @@ function App() {
               <Route path="/metas" element={<Metas />} />
               <Route path="/acoes" element={<Acoes />} />
               <Route path="/renda-fixa" element={<RendaFixa />} />
+              <Route path="/ir" element={<ImpostoRenda />} />
             </Routes>
           </RotaProtegida>
         } />

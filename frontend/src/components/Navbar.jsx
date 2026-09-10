@@ -16,6 +16,7 @@ function Navbar() {
     { path: '/metas', label: 'Metas' },
     { path: '/acoes', label: 'Carteira' },
     { path: '/renda-fixa', label: 'Renda Fixa' },
+    { path: '/ir', label: 'IR' },
   ]
 
   const sair = () => {
@@ -48,7 +49,7 @@ function Navbar() {
                 <Link key={link.path} to={link.path} style={{
                   color: active ? '#A78BFA' : '#6B6B8A',
                   textDecoration: 'none', fontWeight: active ? '600' : '400',
-                  fontSize: '14px', padding: '8px 14px', borderRadius: '8px',
+                  fontSize: '13px', padding: '7px 12px', borderRadius: '8px',
                   background: active ? 'rgba(167,139,250,0.1)' : 'transparent',
                 }}>
                   {link.label}
@@ -61,7 +62,7 @@ function Navbar() {
         {!isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {usuario && (
-              <div style={{ fontSize: '14px', color: '#A0A0C0' }}>
+              <div style={{ fontSize: '13px', color: '#A0A0C0' }}>
                 Olá, <span style={{ color: '#E8E8F0', fontWeight: '600' }}>{usuario.nome.split(' ')[0]}</span>
               </div>
             )}
@@ -90,8 +91,8 @@ function Navbar() {
         <div style={{
           position: 'fixed', top: '64px', left: 0, right: 0, bottom: 0,
           background: '#13131A', zIndex: 99, padding: '24px',
-          borderTop: '1px solid #1E1E2E', display: 'flex', flexDirection: 'column', gap: '8px',
-          overflowY: 'auto'
+          borderTop: '1px solid #1E1E2E', display: 'flex', flexDirection: 'column',
+          gap: '8px', overflowY: 'auto'
         }}>
           {usuario && (
             <div style={{ fontSize: '14px', color: '#A0A0C0', padding: '12px 0', borderBottom: '1px solid #1E1E2E', marginBottom: '8px' }}>
