@@ -12,6 +12,9 @@ import calendar
 
 router = APIRouter()
 
+def definir_status(data_transacao: date) -> str:
+    return "agendado" if data_transacao > date.today() else "confirmado"
+
 def gerar_transacoes_recorrentes(db: Session, transacao: Transacao, meses: int = 12):
     data_base = transacao.data
     for i in range(1, meses + 1):
@@ -43,8 +46,19 @@ def gerar_transacoes_recorrentes(db: Session, transacao: Transacao, meses: int =
             recorrente=True,
             observacao=transacao.observacao,
             usuario_id=transacao.usuario_id,
+            status=definir_status(nova_data),
         )
         db.add(nova)
+
+def atualizar_status_agendados(db: Session, usuario_id: int):
+    """Atualiza transações agendadas cuja data já chegou"""
+    hoje = date.today()
+    db.query(Transacao).filter(
+        Transacao.usuario_id == usuario_id,
+        Transacao.status == "agendado",
+        Transacao.data <= hoje,
+    ).update({"status": "confirmado"})
+    db.commit()
 
 @router.post("/", response_model=TransacaoResponse)
 def criar_transacao(transacao: TransacaoCreate, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
@@ -52,11 +66,13 @@ def criar_transacao(transacao: TransacaoCreate, db: Session = Depends(get_db), u
     dados = transacao.model_dump()
     dados['mes_referencia'] = mes_ref
     dados['usuario_id'] = usuario.id
+    dados['status'] = definir_status(transacao.data)
 
     db_transacao = Transacao(**dados)
     db.add(db_transacao)
 
-    if transacao.tipo == TipoTransacao.investimento and transacao.meta_id:
+    # Só atualiza meta se for confirmado
+    if transacao.tipo == TipoTransacao.investimento and transacao.meta_id and dados['status'] == 'confirmado':
         meta = db.query(Meta).filter(Meta.id == transacao.meta_id, Meta.usuario_id == usuario.id).first()
         if meta:
             meta.valor_atual += transacao.valor
@@ -67,11 +83,11 @@ def criar_transacao(transacao: TransacaoCreate, db: Session = Depends(get_db), u
     db.commit()
     db.refresh(db_transacao)
 
-    if transacao.tipo == TipoTransacao.despesa and transacao.subtipo == "fixa":
+    if transacao.tipo == TipoTransacao.despesa and transacao.subtipo == "fixa" and dados['status'] == 'confirmado':
         gerar_transacoes_recorrentes(db, db_transacao, meses=12)
         db.commit()
 
-    if transacao.tipo == TipoTransacao.despesa and transacao.subtipo == "fixa_parcelada" and transacao.total_parcelas:
+    if transacao.tipo == TipoTransacao.despesa and transacao.subtipo == "fixa_parcelada" and transacao.total_parcelas and dados['status'] == 'confirmado':
         data_base = transacao.data
         for i in range(1, transacao.total_parcelas):
             mes = (data_base.month + i - 1) % 12 + 1
@@ -94,6 +110,7 @@ def criar_transacao(transacao: TransacaoCreate, db: Session = Depends(get_db), u
                 recorrente=True,
                 observacao=transacao.observacao,
                 usuario_id=usuario.id,
+                status=definir_status(nova_data),
             )
             db.add(parcela)
         db.commit()
@@ -102,6 +119,7 @@ def criar_transacao(transacao: TransacaoCreate, db: Session = Depends(get_db), u
 
 @router.get("/", response_model=List[TransacaoResponse])
 def listar_transacoes(mes: Optional[int] = None, ano: Optional[int] = None, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    atualizar_status_agendados(db, usuario.id)
     query = db.query(Transacao).filter(Transacao.usuario_id == usuario.id)
     if mes and ano:
         mes_ref = f"{ano}-{str(mes).zfill(2)}"
@@ -112,9 +130,22 @@ def listar_transacoes(mes: Optional[int] = None, ano: Optional[int] = None, db: 
         query = query.filter(extract('year', Transacao.data) == ano)
     return query.order_by(Transacao.data.desc()).all()
 
+@router.get("/agendados")
+def listar_agendados(db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    atualizar_status_agendados(db, usuario.id)
+    agendados = db.query(Transacao).filter(
+        Transacao.usuario_id == usuario.id,
+        Transacao.status == "agendado",
+    ).order_by(Transacao.data.asc()).all()
+    return agendados
+
 @router.get("/resumo")
 def resumo_mes(mes: Optional[int] = None, ano: Optional[int] = None, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
-    query = db.query(Transacao).filter(Transacao.usuario_id == usuario.id)
+    atualizar_status_agendados(db, usuario.id)
+    query = db.query(Transacao).filter(
+        Transacao.usuario_id == usuario.id,
+        Transacao.status == "confirmado",  # Só conta confirmados
+    )
     if mes and ano:
         mes_ref = f"{ano}-{str(mes).zfill(2)}"
         query = query.filter(Transacao.mes_referencia == mes_ref)
@@ -127,6 +158,9 @@ def resumo_mes(mes: Optional[int] = None, ano: Optional[int] = None, db: Session
     total_despesas = despesas_variaveis + despesas_fixas
     saldo_livre = receitas - total_despesas - investimentos
     comprometimento = round((despesas_fixas / receitas * 100), 1) if receitas > 0 else 0
+
+    # Sugestão baseada na receita bruta
+    sugestao_base = receitas
 
     if receitas > 0 and investimentos / receitas >= 0.20 and comprometimento < 50:
         saude = "excelente"
@@ -148,16 +182,20 @@ def resumo_mes(mes: Optional[int] = None, ano: Optional[int] = None, db: Session
         "saldo_livre": saldo_livre,
         "comprometimento_fixos": comprometimento,
         "saude_financeira": saude,
+        "sugestao_base": sugestao_base,
         "sugestao": {
-            "investimento": round(saldo_livre * 0.60, 2) if saldo_livre > 0 else 0,
-            "lazer": round(saldo_livre * 0.25, 2) if saldo_livre > 0 else 0,
-            "gastos_pessoais": round(saldo_livre * 0.15, 2) if saldo_livre > 0 else 0,
+            "investimento": 0,
+            "lazer": 0,
+            "gastos_pessoais": 0,
         }
     }
 
 @router.get("/grafico-pizza")
 def grafico_pizza(mes: Optional[int] = None, ano: Optional[int] = None, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
-    query = db.query(Transacao).filter(Transacao.usuario_id == usuario.id)
+    query = db.query(Transacao).filter(
+        Transacao.usuario_id == usuario.id,
+        Transacao.status == "confirmado",
+    )
     if mes and ano:
         mes_ref = f"{ano}-{str(mes).zfill(2)}"
         query = query.filter(Transacao.mes_referencia == mes_ref)
@@ -178,7 +216,10 @@ def grafico_pizza(mes: Optional[int] = None, ano: Optional[int] = None, db: Sess
 
 @router.get("/patrimonio")
 def evolucao_patrimonio(db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
-    transacoes = db.query(Transacao).filter(Transacao.usuario_id == usuario.id).order_by(Transacao.data).all()
+    transacoes = db.query(Transacao).filter(
+        Transacao.usuario_id == usuario.id,
+        Transacao.status == "confirmado",
+    ).order_by(Transacao.data).all()
 
     meses = {}
     for t in transacoes:
@@ -206,49 +247,15 @@ def evolucao_patrimonio(db: Session = Depends(get_db), usuario=Depends(get_usuar
 
     return resultado
 
-@router.put("/{id}", response_model=TransacaoResponse)
-def atualizar_transacao(id: int, transacao: TransacaoCreate, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
-    db_transacao = db.query(Transacao).filter(Transacao.id == id, Transacao.usuario_id == usuario.id).first()
-    if not db_transacao:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada")
-
-    # Se era investimento com meta, reverte o valor antigo
-    if db_transacao.tipo == TipoTransacao.investimento and db_transacao.meta_id:
-        meta = db.query(Meta).filter(Meta.id == db_transacao.meta_id).first()
-        if meta:
-            meta.valor_atual = max(0, meta.valor_atual - db_transacao.valor)
-            meta.concluida = meta.valor_atual >= meta.valor_alvo
-
-    # Atualiza os campos
-    for key, value in transacao.model_dump().items():
-        setattr(db_transacao, key, value)
-    db_transacao.mes_referencia = transacao.data.strftime("%Y-%m")
-    db_transacao.usuario_id = usuario.id
-
-    # Se novo tipo é investimento com meta, aplica novo valor
-    if transacao.tipo == TipoTransacao.investimento and transacao.meta_id:
-        meta = db.query(Meta).filter(Meta.id == transacao.meta_id).first()
-        if meta:
-            meta.valor_atual += transacao.valor
-            if meta.valor_atual >= meta.valor_alvo:
-                meta.concluida = True
-                meta.status = "concluida"
-
-    db.commit()
-    db.refresh(db_transacao)
-    return db_transacao
-
 @router.get("/patrimonio-completo")
 def patrimonio_completo(db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
     from app.models.acao import Acao
     from app.models.renda_fixa import RendaFixa
     from app.models.meta import Meta
 
-    # Metas
     metas = db.query(Meta).filter(Meta.usuario_id == usuario.id, Meta.status.in_(["ativa", "pausada", "concluida"])).all()
     total_metas = sum(m.valor_atual for m in metas)
 
-    # Ações
     acoes = db.query(Acao).filter(Acao.usuario_id == usuario.id).all()
     carteira = {}
     for a in acoes:
@@ -258,7 +265,6 @@ def patrimonio_completo(db: Session = Depends(get_db), usuario=Depends(get_usuar
         carteira[t] += a.quantidade * a.preco_pago
     total_acoes = sum(carteira.values())
 
-    # Renda fixa
     renda_fixa = db.query(RendaFixa).filter(RendaFixa.usuario_id == usuario.id).all()
     total_rf = sum(r.valor_investido for r in renda_fixa)
 
@@ -271,13 +277,43 @@ def patrimonio_completo(db: Session = Depends(get_db), usuario=Depends(get_usuar
         "renda_fixa": round(total_rf, 2),
     }
 
+@router.put("/{id}", response_model=TransacaoResponse)
+def atualizar_transacao(id: int, transacao: TransacaoCreate, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    db_transacao = db.query(Transacao).filter(Transacao.id == id, Transacao.usuario_id == usuario.id).first()
+    if not db_transacao:
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada")
+
+    if db_transacao.tipo == TipoTransacao.investimento and db_transacao.meta_id and db_transacao.status == 'confirmado':
+        meta = db.query(Meta).filter(Meta.id == db_transacao.meta_id).first()
+        if meta:
+            meta.valor_atual = max(0, meta.valor_atual - db_transacao.valor)
+            meta.concluida = meta.valor_atual >= meta.valor_alvo
+
+    for key, value in transacao.model_dump().items():
+        setattr(db_transacao, key, value)
+    db_transacao.mes_referencia = transacao.data.strftime("%Y-%m")
+    db_transacao.usuario_id = usuario.id
+    db_transacao.status = definir_status(transacao.data)
+
+    if transacao.tipo == TipoTransacao.investimento and transacao.meta_id and db_transacao.status == 'confirmado':
+        meta = db.query(Meta).filter(Meta.id == transacao.meta_id).first()
+        if meta:
+            meta.valor_atual += transacao.valor
+            if meta.valor_atual >= meta.valor_alvo:
+                meta.concluida = True
+                meta.status = "concluida"
+
+    db.commit()
+    db.refresh(db_transacao)
+    return db_transacao
+
 @router.delete("/{id}")
 def deletar_transacao(id: int, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
     transacao = db.query(Transacao).filter(Transacao.id == id, Transacao.usuario_id == usuario.id).first()
     if not transacao:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada")
 
-    if transacao.tipo == TipoTransacao.investimento and transacao.meta_id:
+    if transacao.tipo == TipoTransacao.investimento and transacao.meta_id and transacao.status == 'confirmado':
         meta = db.query(Meta).filter(Meta.id == transacao.meta_id, Meta.usuario_id == usuario.id).first()
         if meta:
             meta.valor_atual = max(0, meta.valor_atual - transacao.valor)

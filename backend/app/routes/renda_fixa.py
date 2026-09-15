@@ -47,7 +47,32 @@ def resumo_renda_fixa(db: Session = Depends(get_db), usuario=Depends(get_usuario
         if i.tipo not in por_tipo:
             por_tipo[i.tipo] = 0
         por_tipo[i.tipo] += i.valor_investido
-    return {"total": round(total, 2), "quantidade": len(itens), "por_tipo": por_tipo}
+
+    # Ticket médio
+    ticket_medio = round(total / len(itens), 2) if itens else 0
+
+    # Distribuição por tipo de rendimento
+    por_rendimento = {}
+    for i in itens:
+        r = i.tipo_rendimento or "nao_informado"
+        if r not in por_rendimento:
+            por_rendimento[r] = {"total": 0, "quantidade": 0}
+        por_rendimento[r]["total"] += i.valor_investido
+        por_rendimento[r]["quantidade"] += 1
+
+    # Isentos vs tributáveis
+    isentos = sum(i.valor_investido for i in itens if i.tipo in ["lci", "lca", "cri", "cra"])
+    tributaveis = total - isentos
+
+    return {
+        "total": round(total, 2),
+        "quantidade": len(itens),
+        "ticket_medio": ticket_medio,
+        "isentos_ir": round(isentos, 2),
+        "tributaveis_ir": round(tributaveis, 2),
+        "por_tipo": por_tipo,
+        "por_rendimento": por_rendimento,
+    }
 
 @router.delete("/{id}")
 def deletar_renda_fixa(id: int, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):

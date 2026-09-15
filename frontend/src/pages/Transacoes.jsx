@@ -9,6 +9,7 @@ const TOOLTIPS = {
   fixa_com_prazo: 'Gasto fixo que termina em uma data definida. Ex: faculdade até dez/2027.',
   variavel: 'Gasto que muda todo mês conforme o consumo. Ex: mercado, gasolina, restaurante.',
   sazonal: 'Gasto que aparece uma vez por ano. Ex: IPTU, seguro do carro, presente de natal.',
+  agendado: 'Lançamento com data futura. Não está sendo contabilizado ainda — entrará automaticamente quando chegar o dia.',
 }
 
 const CATEGORIAS = {
@@ -54,18 +55,16 @@ function ModalEditar({ transacao, metas, onClose, onSalvar }) {
     observacao: transacao.observacao || '',
   })
   const [loading, setLoading] = useState(false)
+  const corTipo = { receita: '#34D399', despesa: '#F87171', investimento: '#A78BFA' }
+  const bgTipo = { receita: 'rgba(52,211,153,0.1)', despesa: 'rgba(248,113,113,0.1)', investimento: 'rgba(167,139,250,0.1)' }
 
-  const mudarTipo = (tipo) => {
-    setForm({ ...form, tipo, subtipo: tipo === 'despesa' ? 'variavel' : '', categoria: CATEGORIAS[tipo][0], meta_id: '' })
-  }
+  const mudarTipo = (tipo) => setForm({ ...form, tipo, subtipo: tipo === 'despesa' ? 'variavel' : '', categoria: CATEGORIAS[tipo][0], meta_id: '' })
 
   const salvar = async () => {
-    if (!form.valor || !form.data) { alert('Preencha valor e data'); return }
     setLoading(true)
     const descricao = form.tipo === 'receita' ? form.categoria
       : form.tipo === 'investimento' ? `Aporte — ${metas.find(m => m.id == form.meta_id)?.titulo ?? 'Meta'}`
       : `${form.categoria} (${SUBTIPOS_DESPESA.find(s => s.value === form.subtipo)?.label ?? ''})`
-
     await api.put(`/transacoes/${transacao.id}`, {
       descricao, valor: parseFloat(form.valor), tipo: form.tipo,
       subtipo: form.subtipo || null, categoria: form.categoria, data: form.data,
@@ -78,88 +77,39 @@ function ModalEditar({ transacao, metas, onClose, onSalvar }) {
     onSalvar()
   }
 
-  const corTipo = { receita: '#34D399', despesa: '#F87171', investimento: '#A78BFA' }
-  const bgTipo = { receita: 'rgba(52,211,153,0.1)', despesa: 'rgba(248,113,113,0.1)', investimento: 'rgba(167,139,250,0.1)' }
-
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
       <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '20px', padding: '24px', maxWidth: '520px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontSize: '18px', fontWeight: '700', color: '#E8E8F0', marginBottom: '20px' }}>✏️ Editar lançamento</div>
-
-        {/* Tipo */}
         <div style={{ marginBottom: '14px' }}>
           <label style={labelStyle}>Tipo</label>
           <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
             {['receita', 'despesa', 'investimento'].map(t => (
-              <button key={t} onClick={() => mudarTipo(t)} style={{
-                padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                fontWeight: '600', fontSize: '13px', flex: '1',
-                background: form.tipo === t ? bgTipo[t] : '#1E1E2E',
-                color: form.tipo === t ? corTipo[t] : '#6B6B8A',
-                outline: form.tipo === t ? `1px solid ${corTipo[t]}` : 'none',
-              }}>
+              <button key={t} onClick={() => mudarTipo(t)} style={{ padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '13px', flex: '1', background: form.tipo === t ? bgTipo[t] : '#1E1E2E', color: form.tipo === t ? corTipo[t] : '#6B6B8A', outline: form.tipo === t ? `1px solid ${corTipo[t]}` : 'none' }}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
           </div>
         </div>
-
-        {/* Subtipo despesa */}
         {form.tipo === 'despesa' && (
           <div style={{ marginBottom: '14px' }}>
             <label style={labelStyle}>Tipo de despesa</label>
             <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
               {SUBTIPOS_DESPESA.map(s => (
-                <button key={s.value} onClick={() => setForm({ ...form, subtipo: s.value })} style={{
-                  padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px',
-                  background: form.subtipo === s.value ? 'rgba(248,113,113,0.15)' : '#1E1E2E',
-                  color: form.subtipo === s.value ? '#F87171' : '#6B6B8A',
-                  outline: form.subtipo === s.value ? '1px solid #F87171' : 'none',
-                  fontWeight: form.subtipo === s.value ? '600' : '400',
-                }}>
+                <button key={s.value} onClick={() => setForm({ ...form, subtipo: s.value })} style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', background: form.subtipo === s.value ? 'rgba(248,113,113,0.15)' : '#1E1E2E', color: form.subtipo === s.value ? '#F87171' : '#6B6B8A', outline: form.subtipo === s.value ? '1px solid #F87171' : 'none', fontWeight: form.subtipo === s.value ? '600' : '400' }}>
                   {s.label}
                 </button>
               ))}
             </div>
           </div>
         )}
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-          <div>
-            <label style={labelStyle}>Valor (R$)</label>
-            <input type="number" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
-          </div>
-          <div>
-            <label style={labelStyle}>Data</label>
-            <input type="date" value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
-          </div>
-          <div>
-            <label style={labelStyle}>Categoria</label>
-            <select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }}>
-              {CATEGORIAS[form.tipo].map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          {form.tipo === 'investimento' && (
-            <div>
-              <label style={labelStyle}>Meta vinculada</label>
-              <select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }}>
-                <option value="">Selecione</option>
-                {metas.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}
-              </select>
-            </div>
-          )}
-          {form.subtipo === 'fixa_parcelada' && (
-            <div>
-              <label style={labelStyle}>Nº de parcelas</label>
-              <input type="number" value={form.total_parcelas} onChange={e => setForm({ ...form, total_parcelas: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
-            </div>
-          )}
-          <div style={{ gridColumn: 'span 2' }}>
-            <label style={labelStyle}>Observação</label>
-            <input placeholder="Opcional" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
-          </div>
+          <div><label style={labelStyle}>Valor (R$)</label><input type="number" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} /></div>
+          <div><label style={labelStyle}>Data</label><input type="date" value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} /></div>
+          <div><label style={labelStyle}>Categoria</label><select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }}>{CATEGORIAS[form.tipo].map(c => <option key={c}>{c}</option>)}</select></div>
+          {form.tipo === 'investimento' && <div><label style={labelStyle}>Meta</label><select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }}><option value="">Selecione</option>{metas.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}</select></div>}
+          <div style={{ gridColumn: 'span 2' }}><label style={labelStyle}>Observação</label><input placeholder="Opcional" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} /></div>
         </div>
-
         <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
           <button onClick={onClose} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #2D2D42', background: 'none', color: '#6B6B8A', cursor: 'pointer' }}>Cancelar</button>
           <button onClick={salvar} disabled={loading} style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #7C3AED, #A78BFA)', color: '#fff', fontWeight: '600', cursor: 'pointer' }}>
@@ -180,11 +130,7 @@ function Transacoes() {
   const [aba, setAba] = useState('lancamentos')
   const [loading, setLoading] = useState(false)
   const [editando, setEditando] = useState(null)
-  const [form, setForm] = useState({
-    valor: '', tipo: 'receita', subtipo: 'variavel',
-    categoria: 'Salário', data: '', meta_id: '',
-    total_parcelas: '', observacao: ''
-  })
+  const [form, setForm] = useState({ valor: '', tipo: 'receita', subtipo: 'variavel', categoria: 'Salário', data: '', meta_id: '', total_parcelas: '', observacao: '' })
   const { isMobile } = useWindowSize()
 
   const carregar = () => {
@@ -195,20 +141,16 @@ function Transacoes() {
 
   useEffect(() => { carregar() }, [mes, ano])
 
-  const mudarTipo = (tipo) => {
-    setForm({ ...form, tipo, subtipo: tipo === 'despesa' ? 'variavel' : '', categoria: CATEGORIAS[tipo][0], meta_id: '', total_parcelas: '' })
-  }
+  const mudarTipo = (tipo) => setForm({ ...form, tipo, subtipo: tipo === 'despesa' ? 'variavel' : '', categoria: CATEGORIAS[tipo][0], meta_id: '', total_parcelas: '' })
 
   const salvar = async () => {
     if (!form.valor || !form.data) { alert('Preencha valor e data'); return }
     if (form.tipo === 'investimento' && !form.meta_id) { alert('Selecione a meta vinculada'); return }
     if (form.subtipo === 'fixa_parcelada' && !form.total_parcelas) { alert('Informe o número de parcelas'); return }
     setLoading(true)
-
     const descricao = form.tipo === 'receita' ? form.categoria
       : form.tipo === 'investimento' ? `Aporte — ${metas.find(m => m.id == form.meta_id)?.titulo ?? 'Meta'}`
       : `${form.categoria} (${SUBTIPOS_DESPESA.find(s => s.value === form.subtipo)?.label ?? ''})`
-
     await api.post('/transacoes', {
       descricao, valor: parseFloat(form.valor), tipo: form.tipo,
       subtipo: form.subtipo || null, categoria: form.categoria, data: form.data,
@@ -242,6 +184,9 @@ function Transacoes() {
   const bgTipo = { receita: 'rgba(52,211,153,0.1)', despesa: 'rgba(248,113,113,0.1)', investimento: 'rgba(167,139,250,0.1)' }
   const labelSubtipo = { fixa: 'Fixa', fixa_parcelada: 'Parcelada', fixa_com_prazo: 'Com prazo', variavel: 'Variável', sazonal: 'Sazonal' }
 
+  const confirmados = transacoes.filter(t => t.status === 'confirmado')
+  const agendados = transacoes.filter(t => t.status === 'agendado')
+
   const dadosPizza = pizza ? [
     { name: 'Desp. variáveis', value: pizza.despesas_variaveis },
     { name: 'Desp. fixas', value: pizza.despesas_fixas },
@@ -252,17 +197,80 @@ function Transacoes() {
   const padding = isMobile ? '16px' : '32px'
   const gridForm = isMobile ? '1fr' : 'repeat(3, 1fr)'
 
+  const renderLinha = (t, i, total) => (
+    <div key={t.id} style={{
+      padding: isMobile ? '12px 14px' : '0',
+      borderTop: i === 0 ? 'none' : '1px solid #1E1E2E',
+      opacity: t.status === 'agendado' ? 0.7 : 1,
+    }}>
+      {isMobile ? (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: '600', color: t.status === 'agendado' ? '#6B6B8A' : '#E8E8F0', fontSize: '14px' }}>{t.descricao}</span>
+                {t.status === 'agendado' && <span style={{ fontSize: '10px', background: 'rgba(167,139,250,0.15)', color: '#A78BFA', padding: '1px 6px', borderRadius: '4px', fontWeight: '600' }}>⏰ Agendado</span>}
+              </div>
+              <div style={{ fontSize: '12px', color: '#6B6B8A', marginTop: '2px' }}>{new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
+              {t.observacao && <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '3px', fontStyle: 'italic' }}>📝 {t.observacao}</div>}
+            </div>
+            <div style={{ fontWeight: '700', color: t.status === 'agendado' ? '#6B6B8A' : corTipo[t.tipo], fontSize: '14px', marginLeft: '8px' }}>
+              {t.tipo === 'receita' ? '+' : '-'} {fmt(t.valor)}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ background: bgTipo[t.tipo], color: corTipo[t.tipo], padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '600' }}>
+              {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+            </span>
+            {t.subtipo && <span style={{ background: '#1E1E2E', color: '#A0A0C0', padding: '2px 8px', borderRadius: '6px', fontSize: '11px' }}>{labelSubtipo[t.subtipo]}</span>}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+              <button onClick={() => setEditando(t)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#A78BFA', cursor: 'pointer', fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>Editar</button>
+              <button onClick={() => deletar(t.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>Deletar</button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <tr style={{ borderTop: i === 0 ? 'none' : '1px solid #1E1E2E', opacity: t.status === 'agendado' ? 0.7 : 1 }}
+          onMouseEnter={e => e.currentTarget.style.background = '#16161F'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6B6B8A' }}>{new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+          <td style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontWeight: '500', color: t.status === 'agendado' ? '#6B6B8A' : '#E8E8F0', fontSize: '14px' }}>{t.descricao}</span>
+              {t.status === 'agendado' && <span style={{ fontSize: '10px', background: 'rgba(167,139,250,0.15)', color: '#A78BFA', padding: '1px 6px', borderRadius: '4px', fontWeight: '600' }}>⏰ Agendado <TooltipInfo texto={TOOLTIPS.agendado} /></span>}
+            </div>
+            {t.observacao && <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '3px', fontStyle: 'italic' }}>📝 {t.observacao}</div>}
+          </td>
+          <td style={{ padding: '12px 16px' }}>
+            <span style={{ background: bgTipo[t.tipo], color: corTipo[t.tipo], padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600' }}>
+              {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+            </span>
+          </td>
+          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#A0A0C0' }}>
+            {t.subtipo && <span style={{ background: '#1E1E2E', color: '#A0A0C0', padding: '3px 10px', borderRadius: '6px', fontSize: '12px' }}>{labelSubtipo[t.subtipo]}{t.total_parcelas && t.parcela_atual ? ` ${t.parcela_atual}/${t.total_parcelas}` : ''}</span>}
+          </td>
+          <td style={{ padding: '12px 16px', fontWeight: '700', color: t.status === 'agendado' ? '#6B6B8A' : corTipo[t.tipo], fontSize: '14px' }}>
+            {t.tipo === 'receita' ? '+' : '-'} {fmt(t.valor)}
+          </td>
+          <td style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => setEditando(t)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#A78BFA', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                onMouseEnter={e => { e.target.style.background = 'rgba(167,139,250,0.1)' }}
+                onMouseLeave={e => { e.target.style.background = 'none' }}>Editar</button>
+              <button onClick={() => deletar(t.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                onMouseEnter={e => { e.target.style.borderColor = '#F87171'; e.target.style.color = '#F87171' }}
+                onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.color = '#6B6B8A' }}>Deletar</button>
+            </div>
+          </td>
+        </tr>
+      )}
+    </div>
+  )
+
   return (
     <div style={{ padding, maxWidth: '1100px', margin: '0 auto' }}>
 
-      {editando && (
-        <ModalEditar
-          transacao={editando}
-          metas={metas}
-          onClose={() => setEditando(null)}
-          onSalvar={() => { setEditando(null); carregar() }}
-        />
-      )}
+      {editando && <ModalEditar transacao={editando} metas={metas} onClose={() => setEditando(null)} onSalvar={() => { setEditando(null); carregar() }} />}
 
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: '700', color: '#E8E8F0', letterSpacing: '-0.5px' }}>Transações</h1>
@@ -272,95 +280,50 @@ function Transacoes() {
       {/* Formulário */}
       <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: isMobile ? '16px' : '24px', marginBottom: '20px' }}>
         <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>Novo lançamento</div>
-
         <div style={{ marginBottom: '14px' }}>
           <label style={labelStyle}>Tipo de lançamento</label>
           <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
             {['receita', 'despesa', 'investimento'].map(t => (
-              <button key={t} onClick={() => mudarTipo(t)} style={{
-                padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                fontWeight: '600', fontSize: '13px',
-                background: form.tipo === t ? bgTipo[t] : '#1E1E2E',
-                color: form.tipo === t ? corTipo[t] : '#6B6B8A',
-                outline: form.tipo === t ? `1px solid ${corTipo[t]}` : 'none',
-                flex: isMobile ? '1' : 'none',
-              }}>
+              <button key={t} onClick={() => mudarTipo(t)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '13px', background: form.tipo === t ? bgTipo[t] : '#1E1E2E', color: form.tipo === t ? corTipo[t] : '#6B6B8A', outline: form.tipo === t ? `1px solid ${corTipo[t]}` : 'none', flex: isMobile ? '1' : 'none' }}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
           </div>
         </div>
-
         {form.tipo === 'despesa' && (
           <div style={{ marginBottom: '14px' }}>
-            <label style={labelStyle}>
-              Tipo de despesa
-              {form.subtipo && TOOLTIPS[form.subtipo] && <TooltipInfo texto={TOOLTIPS[form.subtipo]} />}
-            </label>
+            <label style={labelStyle}>Tipo de despesa {form.subtipo && TOOLTIPS[form.subtipo] && <TooltipInfo texto={TOOLTIPS[form.subtipo]} />}</label>
             <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
               {SUBTIPOS_DESPESA.map(s => (
-                <button key={s.value} onClick={() => setForm({ ...form, subtipo: s.value })} style={{
-                  padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px',
-                  background: form.subtipo === s.value ? 'rgba(248,113,113,0.15)' : '#1E1E2E',
-                  color: form.subtipo === s.value ? '#F87171' : '#6B6B8A',
-                  outline: form.subtipo === s.value ? '1px solid #F87171' : 'none',
-                  fontWeight: form.subtipo === s.value ? '600' : '400',
-                }}>
+                <button key={s.value} onClick={() => setForm({ ...form, subtipo: s.value })} style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', background: form.subtipo === s.value ? 'rgba(248,113,113,0.15)' : '#1E1E2E', color: form.subtipo === s.value ? '#F87171' : '#6B6B8A', outline: form.subtipo === s.value ? '1px solid #F87171' : 'none', fontWeight: form.subtipo === s.value ? '600' : '400' }}>
                   {s.label}
                 </button>
               ))}
             </div>
           </div>
         )}
-
         {form.tipo === 'investimento' && (
           <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: '#A78BFA' }}>
             💜 Investimentos são vinculados a uma meta e somam ao seu patrimônio.
           </div>
         )}
-
         <div style={{ display: 'grid', gridTemplateColumns: gridForm, gap: '10px' }}>
+          <div><label style={labelStyle}>Valor (R$)</label><input placeholder="Ex: 1500" type="number" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} /></div>
           <div>
-            <label style={labelStyle}>Valor (R$)</label>
-            <input placeholder="Ex: 1500" type="number" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
-          </div>
-          <div>
-            <label style={labelStyle}>Data</label>
+            <label style={labelStyle}>Data {form.data && new Date(form.data + 'T00:00:00') > new Date() && <span style={{ color: '#A78BFA', fontSize: '11px', marginLeft: '6px' }}>⏰ Será agendado</span>}</label>
             <input type="date" value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
           </div>
-          <div>
-            <label style={labelStyle}>Categoria</label>
-            <select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }}>
-              {CATEGORIAS[form.tipo].map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          {form.tipo === 'investimento' && (
-            <div style={{ gridColumn: isMobile ? '1' : 'span 2' }}>
-              <label style={labelStyle}>Meta vinculada</label>
-              <select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })} style={{ ...inputStyle, marginTop: '6px', color: form.meta_id ? '#E8E8F0' : '#6B6B8A' }}>
-                <option value="">Selecione a meta</option>
-                {metas.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}
-              </select>
-            </div>
-          )}
-          {form.subtipo === 'fixa_parcelada' && (
-            <div>
-              <label style={labelStyle}>Nº de parcelas</label>
-              <input placeholder="Ex: 12" type="number" value={form.total_parcelas} onChange={e => setForm({ ...form, total_parcelas: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
-            </div>
-          )}
-          <div style={{ gridColumn: isMobile ? '1' : 'span 3' }}>
-            <label style={labelStyle}>Observação (opcional)</label>
-            <input placeholder="Alguma anotação" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
-          </div>
+          <div><label style={labelStyle}>Categoria</label><select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }}>{CATEGORIAS[form.tipo].map(c => <option key={c}>{c}</option>)}</select></div>
+          {form.tipo === 'investimento' && <div style={{ gridColumn: isMobile ? '1' : 'span 2' }}><label style={labelStyle}>Meta vinculada</label><select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })} style={{ ...inputStyle, marginTop: '6px', color: form.meta_id ? '#E8E8F0' : '#6B6B8A' }}><option value="">Selecione a meta</option>{metas.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}</select></div>}
+          {form.subtipo === 'fixa_parcelada' && <div><label style={labelStyle}>Nº de parcelas</label><input placeholder="Ex: 12" type="number" value={form.total_parcelas} onChange={e => setForm({ ...form, total_parcelas: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} /></div>}
+          <div style={{ gridColumn: isMobile ? '1' : 'span 3' }}><label style={labelStyle}>Observação (opcional)</label><input placeholder="Alguma anotação" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} /></div>
         </div>
-
         <button onClick={salvar} disabled={loading} style={{ ...btnStyle, width: isMobile ? '100%' : 'auto' }}>
           {loading ? 'Salvando...' : '+ Salvar lançamento'}
         </button>
       </div>
 
-      {/* Navegação de mês */}
+      {/* Navegação */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button onClick={() => navegarMes(-1)} style={navBtn}>‹</button>
@@ -369,11 +332,7 @@ function Transacoes() {
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {['lancamentos', 'distribuicao'].map(a => (
-            <button key={a} onClick={() => setAba(a)} style={{
-              padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px',
-              background: aba === a ? 'rgba(167,139,250,0.15)' : '#1E1E2E',
-              color: aba === a ? '#A78BFA' : '#6B6B8A', fontWeight: aba === a ? '600' : '400',
-            }}>
+            <button key={a} onClick={() => setAba(a)} style={{ padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', background: aba === a ? 'rgba(167,139,250,0.15)' : '#1E1E2E', color: aba === a ? '#A78BFA' : '#6B6B8A', fontWeight: aba === a ? '600' : '400' }}>
               {a === 'lancamentos' ? 'Lançamentos' : 'Distribuição'}
             </button>
           ))}
@@ -384,91 +343,45 @@ function Transacoes() {
       {aba === 'lancamentos' && (
         <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', overflow: 'hidden' }}>
           {transacoes.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#6B6B8A', fontSize: '14px' }}>
-              Nenhum lançamento em {nomeMes}
-            </div>
+            <div style={{ padding: '40px', textAlign: 'center', color: '#6B6B8A', fontSize: '14px' }}>Nenhum lançamento em {nomeMes}</div>
           ) : isMobile ? (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {transacoes.map((t, i) => (
-                <div key={t.id} style={{ padding: '14px 16px', borderTop: i === 0 ? 'none' : '1px solid #1E1E2E' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                    <div>
-                      <div style={{ fontWeight: '600', color: '#E8E8F0', fontSize: '14px', marginBottom: '4px' }}>{t.descricao}</div>
-                      <div style={{ fontSize: '12px', color: '#6B6B8A' }}>{new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
-                    </div>
-                    <div style={{ fontWeight: '700', color: corTipo[t.tipo], fontSize: '15px' }}>
-                      {t.tipo === 'receita' ? '+' : '-'} {fmt(t.valor)}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{ background: bgTipo[t.tipo], color: corTipo[t.tipo], padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '600' }}>
-                      {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
-                    </span>
-                    {t.subtipo && (
-                      <span style={{ background: '#1E1E2E', color: '#A0A0C0', padding: '2px 8px', borderRadius: '6px', fontSize: '11px' }}>
-                        {labelSubtipo[t.subtipo]}
-                      </span>
-                    )}
-                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
-                      <button onClick={() => setEditando(t)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#A78BFA', cursor: 'pointer', fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>
-                        Editar
-                      </button>
-                      <button onClick={() => deletar(t.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>
-                        Deletar
-                      </button>
-                    </div>
-                  </div>
+              {agendados.length > 0 && (
+                <div style={{ padding: '10px 14px', background: 'rgba(167,139,250,0.05)', borderBottom: '1px solid #1E1E2E', fontSize: '12px', color: '#A78BFA' }}>
+                  ⏰ {agendados.length} lançamento(s) agendado(s) — não contabilizados
                 </div>
-              ))}
+              )}
+              {[...agendados, ...confirmados].map((t, i) => renderLinha(t, i, transacoes.length))}
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #1E1E2E' }}>
                   {['Data', 'Descrição', 'Tipo', 'Subtipo', 'Valor', 'Ações'].map(h => (
-                    <th key={h} style={{ padding: '14px 20px', textAlign: 'left', fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px' }}>{h}</th>
+                    <th key={h} style={{ padding: '14px 16px', textAlign: 'left', fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {transacoes.map((t, i) => (
-                  <tr key={t.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #1E1E2E' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#16161F'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <td style={tdStyle}>{new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                    <td style={{ ...tdStyle, fontWeight: '500', color: '#E8E8F0' }}>{t.descricao}</td>
-                    <td style={tdStyle}>
-                      <span style={{ background: bgTipo[t.tipo], color: corTipo[t.tipo], padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600' }}>
-                        {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      {t.subtipo && (
-                        <span style={{ background: '#1E1E2E', color: '#A0A0C0', padding: '3px 10px', borderRadius: '6px', fontSize: '12px' }}>
-                          {labelSubtipo[t.subtipo]}
-                          {t.total_parcelas && t.parcela_atual ? ` ${t.parcela_atual}/${t.total_parcelas}` : ''}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ ...tdStyle, fontWeight: '700', color: corTipo[t.tipo] }}>
-                      {t.tipo === 'receita' ? '+' : '-'} {fmt(t.valor)}
-                    </td>
-                    <td style={tdStyle}>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button onClick={() => setEditando(t)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#A78BFA', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
-                          onMouseEnter={e => { e.target.style.borderColor = '#A78BFA'; e.target.style.background = 'rgba(167,139,250,0.1)' }}
-                          onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.background = 'none' }}>
-                          Editar
-                        </button>
-                        <button onClick={() => deletar(t.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
-                          onMouseEnter={e => { e.target.style.borderColor = '#F87171'; e.target.style.color = '#F87171' }}
-                          onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.color = '#6B6B8A' }}>
-                          Deletar
-                        </button>
-                      </div>
+                {agendados.length > 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '8px 16px', background: 'rgba(167,139,250,0.05)', fontSize: '11px', color: '#A78BFA', fontWeight: '600' }}>
+                      ⏰ AGENDADOS — não contabilizados nos totais
                     </td>
                   </tr>
-                ))}
+                )}
+                {agendados.map((t, i) => renderLinha(t, i, agendados.length))}
+                {agendados.length > 0 && confirmados.length > 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '8px 16px', background: 'rgba(52,211,153,0.03)', fontSize: '11px', color: '#34D399', fontWeight: '600' }}>
+                      ✓ CONFIRMADOS
+                    </td>
+                  </tr>
+                )}
+                {confirmados.map((t, i) => renderLinha(t, i, confirmados.length))}
+                {transacoes.length === 0 && (
+                  <tr><td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#6B6B8A', fontSize: '14px' }}>Nenhum lançamento em {nomeMes}</td></tr>
+                )}
               </tbody>
             </table>
           )}
@@ -478,9 +391,7 @@ function Transacoes() {
       {/* Aba distribuição */}
       {aba === 'distribuicao' && (
         <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '20px' }}>
-          <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '20px' }}>
-            Distribuição — {nomeMes}
-          </div>
+          <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '20px' }}>Distribuição — {nomeMes}</div>
           {dadosPizza.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#6B6B8A', padding: '40px' }}>Nenhum dado para exibir</div>
           ) : (
@@ -521,6 +432,5 @@ const labelStyle = { fontSize: '12px', color: '#6B6B8A', letterSpacing: '0.5px',
 const inputStyle = { padding: '11px 14px', borderRadius: '10px', border: '1px solid #2D2D42', fontSize: '14px', width: '100%', boxSizing: 'border-box', background: '#0F0F14', color: '#E8E8F0' }
 const btnStyle = { marginTop: '16px', background: 'linear-gradient(135deg, #7C3AED, #A78BFA)', color: '#fff', border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }
 const navBtn = { background: '#1E1E2E', border: 'none', color: '#A78BFA', cursor: 'pointer', fontSize: '20px', width: '36px', height: '36px', borderRadius: '8px' }
-const tdStyle = { padding: '14px 20px', fontSize: '14px', color: '#A0A0C0' }
 
 export default Transacoes

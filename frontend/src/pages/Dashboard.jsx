@@ -29,6 +29,13 @@ function ModalDetalhes({ titulo, transacoes, onClose }) {
   const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
   const corTipo = { receita: '#34D399', despesa: '#F87171', investimento: '#A78BFA' }
   const bgTipo = { receita: 'rgba(52,211,153,0.1)', despesa: 'rgba(248,113,113,0.1)', investimento: 'rgba(167,139,250,0.1)' }
+
+  // Calcula saldo real: receitas somam, despesas e investimentos subtraem
+  const saldoReal = transacoes.reduce((acc, t) => {
+    if (t.tipo === 'receita') return acc + t.valor
+    return acc - t.valor
+  }, 0)
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
       <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '20px', padding: '24px', maxWidth: '560px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
@@ -42,7 +49,7 @@ function ModalDetalhes({ titulo, transacoes, onClose }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {transacoes.map((t, i) => (
-                <div key={t.id} style={{ padding: '12px 0', borderBottom: i < transacoes.length - 1 ? '1px solid #1E1E2E' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                <div key={t.id} style={{ padding: '12px 0', borderBottom: i < transacoes.length - 1 ? '1px solid #1E1E2E' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: '500', color: '#E8E8F0', marginBottom: '4px' }}>{t.descricao}</div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -52,8 +59,13 @@ function ModalDetalhes({ titulo, transacoes, onClose }) {
                       </span>
                       {t.categoria && <span style={{ fontSize: '11px', color: '#6B6B8A', background: '#1E1E2E', padding: '1px 8px', borderRadius: '4px' }}>{t.categoria}</span>}
                     </div>
+                    {t.observacao && (
+                      <div style={{ fontSize: '12px', color: '#6B6B8A', marginTop: '4px', fontStyle: 'italic' }}>
+                        📝 {t.observacao}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontWeight: '700', color: corTipo[t.tipo], fontSize: '15px', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontWeight: '700', color: t.tipo === 'receita' ? '#34D399' : '#F87171', fontSize: '15px', whiteSpace: 'nowrap' }}>
                     {t.tipo === 'receita' ? '+' : '-'} {fmt(t.valor)}
                   </div>
                 </div>
@@ -63,8 +75,8 @@ function ModalDetalhes({ titulo, transacoes, onClose }) {
         </div>
         <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #1E1E2E', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '13px', color: '#6B6B8A' }}>{transacoes.length} lançamento(s)</span>
-          <span style={{ fontSize: '15px', fontWeight: '700', color: '#E8E8F0' }}>
-            {fmt(transacoes.reduce((acc, t) => acc + t.valor, 0))}
+          <span style={{ fontSize: '15px', fontWeight: '700', color: saldoReal >= 0 ? '#34D399' : '#F87171' }}>
+            Saldo: {saldoReal >= 0 ? '+' : ''}{fmt(saldoReal)}
           </span>
         </div>
       </div>
@@ -98,7 +110,7 @@ function ModalAlocacao({ pct, onClose, onSalvar }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6B6B8A', cursor: 'pointer', fontSize: '20px' }}>✕</button>
         </div>
         <p style={{ fontSize: '13px', color: '#6B6B8A', marginBottom: '24px' }}>
-          Defina como deseja dividir o saldo livre. Os percentuais devem somar 100%.
+          Percentuais aplicados sobre a <strong style={{ color: '#E8E8F0' }}>receita bruta</strong> do mês. Devem somar 100%.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
           {[
@@ -117,7 +129,7 @@ function ModalAlocacao({ pct, onClose, onSalvar }) {
                 </div>
               </div>
               <div style={{ background: '#1E1E2E', borderRadius: '4px', height: '6px' }}>
-                <div style={{ width: `${Math.min(parseFloat(form[item.key]) || 0, 100)}%`, background: item.cor, height: '6px', borderRadius: '4px', transition: 'width 0.3s' }} />
+                <div style={{ width: `${Math.min(parseFloat(form[item.key]) || 0, 100)}%`, background: item.cor, height: '6px', borderRadius: '4px' }} />
               </div>
             </div>
           ))}
@@ -155,7 +167,7 @@ function BannerMetaConcluida({ metas, onResgatar }) {
               <div style={{ fontSize: '13px', color: '#A0A0C0' }}>Você acumulou <strong style={{ color: '#FBBF24' }}>{fmt(meta.valor_atual)}</strong></div>
             </div>
           </div>
-          <button onClick={() => onResgatar(meta)} style={{ background: 'linear-gradient(135deg, #F59E0B, #FBBF24)', color: '#000', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <button onClick={() => onResgatar(meta)} style={{ background: 'linear-gradient(135deg, #F59E0B, #FBBF24)', color: '#000', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
             Resgatar / Manter
           </button>
         </div>
@@ -213,6 +225,7 @@ function Dashboard() {
   const [patrimonio, setPatrimonio] = useState([])
   const [patrimonioCompleto, setPatrimonioCompleto] = useState(null)
   const [todasTransacoes, setTodasTransacoes] = useState([])
+  const [agendados, setAgendados] = useState([])
   const [periodo, setPeriodo] = useState('6')
   const [modalMeta, setModalMeta] = useState(null)
   const [modalDetalhes, setModalDetalhes] = useState(null)
@@ -230,6 +243,7 @@ function Dashboard() {
     api.get('/transacoes/patrimonio-completo').then(r => setPatrimonioCompleto(r.data))
     api.get(`/transacoes?mes=${mes}&ano=${ano}`).then(r => setTodasTransacoes(r.data))
     api.get('/preferencias').then(r => setPct(r.data))
+    api.get('/transacoes/agendados').then(r => setAgendados(r.data))
   }
 
   useEffect(() => { carregar() }, [])
@@ -246,19 +260,21 @@ function Dashboard() {
   }
 
   const abrirDetalhes = (tipo, titulo) => {
-    const filtradas = todasTransacoes.filter(t => t.tipo === tipo)
+    const filtradas = todasTransacoes.filter(t => t.tipo === tipo && t.status === 'confirmado')
     setModalDetalhes({ titulo, transacoes: filtradas })
   }
 
   const abrirDetalhesSaldo = () => {
-    setModalDetalhes({ titulo: 'Todos os lançamentos do mês', transacoes: todasTransacoes })
+    const confirmados = todasTransacoes.filter(t => t.status === 'confirmado')
+    setModalDetalhes({ titulo: 'Todos os lançamentos do mês', transacoes: confirmados })
   }
 
-  const saldoLivre = resumo?.saldo_livre ?? 0
+  // Sugestão baseada na receita bruta
+  const receitaBruta = resumo?.receitas ?? 0
   const sugestao = {
-    investimento: Math.round(saldoLivre * (pct.pct_investimento / 100) * 100) / 100,
-    lazer: Math.round(saldoLivre * (pct.pct_lazer / 100) * 100) / 100,
-    gastos_pessoais: Math.round(saldoLivre * (pct.pct_gastos / 100) * 100) / 100,
+    investimento: Math.round(receitaBruta * (pct.pct_investimento / 100) * 100) / 100,
+    lazer: Math.round(receitaBruta * (pct.pct_lazer / 100) * 100) / 100,
+    gastos_pessoais: Math.round(receitaBruta * (pct.pct_gastos / 100) * 100) / 100,
   }
 
   const colsCards = isMobile ? '1fr 1fr' : isTablet ? '1fr 1fr' : 'repeat(4, 1fr)'
@@ -272,7 +288,6 @@ function Dashboard() {
       {modalDetalhes && <ModalDetalhes titulo={modalDetalhes.titulo} transacoes={modalDetalhes.transacoes} onClose={() => setModalDetalhes(null)} />}
       {modalAlocacao && <ModalAlocacao pct={pct} onClose={() => setModalAlocacao(false)} onSalvar={() => { setModalAlocacao(false); carregar() }} />}
 
-      {/* Header */}
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: '700', color: '#E8E8F0', letterSpacing: '-0.5px' }}>Visão geral</h1>
         <p style={{ color: '#6B6B8A', fontSize: '13px', marginTop: '4px' }}>
@@ -282,13 +297,22 @@ function Dashboard() {
 
       <BannerMetaConcluida metas={metas} onResgatar={setModalMeta} />
 
-      {/* Cards principais */}
+      {/* Banner agendados */}
+      {agendados.length > 0 && (
+        <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '12px', padding: '12px 16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <span style={{ fontSize: '13px', color: '#A78BFA' }}>
+            ⏰ Você tem <strong>{agendados.length}</strong> lançamento(s) agendado(s) para datas futuras — não estão contabilizados ainda.
+          </span>
+        </div>
+      )}
+
+      {/* Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: colsCards, gap: '12px', marginBottom: '16px' }}>
         {[
-          { label: 'Receitas do mês', valor: resumo?.receitas, cor: '#34D399', bg: 'rgba(52,211,153,0.08)', border: 'rgba(52,211,153,0.15)', tooltip: 'Tudo que entrou de dinheiro este mês.', onClick: () => abrirDetalhes('receita', 'Receitas do mês') },
-          { label: 'Despesas do mês', valor: resumo?.total_despesas, cor: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.15)', tooltip: 'Soma de todas as despesas fixas e variáveis.', onClick: () => abrirDetalhes('despesa', 'Despesas do mês') },
-          { label: 'Investido', valor: resumo?.investimentos, cor: '#A78BFA', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.15)', tooltip: 'Valor aportado nas metas este mês.', onClick: () => abrirDetalhes('investimento', 'Investimentos do mês') },
-          { label: 'Saldo livre', valor: resumo?.saldo_livre, cor: '#FBBF24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.15)', tooltip: 'O que sobrou após despesas e investimentos.', onClick: abrirDetalhesSaldo },
+          { label: 'Receitas do mês', valor: resumo?.receitas, cor: '#34D399', bg: 'rgba(52,211,153,0.08)', border: 'rgba(52,211,153,0.15)', tooltip: 'Tudo que entrou de dinheiro este mês (apenas confirmados).', onClick: () => abrirDetalhes('receita', 'Receitas do mês') },
+          { label: 'Despesas do mês', valor: resumo?.total_despesas, cor: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.15)', tooltip: 'Soma de todas as despesas fixas e variáveis confirmadas.', onClick: () => abrirDetalhes('despesa', 'Despesas do mês') },
+          { label: 'Investido', valor: resumo?.investimentos, cor: '#A78BFA', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.15)', tooltip: 'Aportes em metas confirmados este mês.', onClick: () => abrirDetalhes('investimento', 'Investimentos do mês') },
+          { label: 'Saldo livre', valor: resumo?.saldo_livre, cor: '#FBBF24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.15)', tooltip: 'O que sobrou após despesas e investimentos confirmados.', onClick: abrirDetalhesSaldo },
         ].map(card => (
           <div key={card.label} onClick={card.onClick} style={{ background: card.bg, border: `1px solid ${card.border}`, borderRadius: '16px', padding: '16px', cursor: 'pointer', transition: 'opacity 0.15s' }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
@@ -369,7 +393,7 @@ function Dashboard() {
         <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center' }}>
-              Evolução do patrimônio <InfoTooltip texto="Aportes acumulados nas metas ao longo do tempo." />
+              Evolução do patrimônio <InfoTooltip texto="Aportes acumulados ao longo do tempo." />
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
               {['3', '6', '12'].map(p => (
@@ -402,20 +426,20 @@ function Dashboard() {
         <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center' }}>
-              Sugestão <InfoTooltip texto="Baseado no seu saldo livre e nos percentuais configurados." />
+              Sugestão <InfoTooltip texto="Baseado na sua receita bruta do mês — não muda conforme você gasta." />
             </div>
             <button onClick={() => setModalAlocacao(true)} style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', color: '#A78BFA', cursor: 'pointer', fontSize: '11px', padding: '4px 10px', borderRadius: '6px', fontWeight: '600' }}>
               ⚙️ Personalizar
             </button>
           </div>
-          {!resumo || resumo.saldo_livre <= 0 ? (
+          {receitaBruta <= 0 ? (
             <div style={{ color: '#6B6B8A', fontSize: '13px' }}>
-              {!resumo ? 'Carregando...' : 'Sem saldo livre. Lance suas receitas para ver a sugestão.'}
+              Lance suas receitas do mês para ver a sugestão.
             </div>
           ) : (
             <>
               <div style={{ fontSize: '12px', color: '#6B6B8A', marginBottom: '14px' }}>
-                Saldo livre: <span style={{ color: '#FBBF24', fontWeight: '600' }}>{fmt(resumo.saldo_livre)}</span>
+                Baseado em: <span style={{ color: '#34D399', fontWeight: '600' }}>{fmt(receitaBruta)}</span> de receita bruta
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {[
@@ -459,7 +483,7 @@ function Dashboard() {
                     <span style={{ fontSize: '13px', color: '#A78BFA', fontWeight: '600' }}>{pct2.toFixed(0)}%</span>
                   </div>
                   <div style={{ background: '#1E1E2E', borderRadius: '4px', height: '6px' }}>
-                    <div style={{ width: `${pct2}%`, background: 'linear-gradient(90deg, #7C3AED, #A78BFA)', height: '6px', borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                    <div style={{ width: `${pct2}%`, background: 'linear-gradient(90deg, #7C3AED, #A78BFA)', height: '6px', borderRadius: '4px' }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
                     <span style={{ fontSize: '12px', color: '#6B6B8A' }}>{fmt(meta.valor_atual)}</span>

@@ -25,5 +25,6 @@ class Transacao(Base):
     recorrente = Column(Boolean, default=False)
     observacao = Column(String, nullable=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    status = Column(String, default="confirmado")  # confirmado | agendado
 
     meta = relationship("Meta", back_populates="aportes")

@@ -21,6 +21,7 @@ class TransacaoBase(BaseModel):
     parcela_atual: Optional[int] = None
     recorrente: Optional[bool] = False
     observacao: Optional[str] = None
+    status: Optional[str] = "confirmado"
 
 class TransacaoCreate(TransacaoBase):
     pass
