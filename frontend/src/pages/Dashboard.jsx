@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { useWindowSize } from '../useWindowSize'
 
 const SAUDE_INFO = {
@@ -25,16 +25,158 @@ function InfoTooltip({ texto }) {
   )
 }
 
+// Gera array de meses para o período selecionado
+function gerarMesesPeriodo(periodo) {
+  const meses = []
+  const hoje = new Date()
+  for (let i = parseInt(periodo) - 1; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+    const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    meses.push(chave)
+  }
+  return meses
+}
+
+function GraficoPatrimonio({ dados, periodo, setPeriodo, fmt }) {
+  const [modo, setModo] = useState('total')
+
+  // Preenche todos os meses do período, mesmo sem dados
+  const mesesPeriodo = gerarMesesPeriodo(periodo)
+  const dadosMap = {}
+  let ultimoTotal = 0, ultimoMetas = 0, ultimoAcoes = 0, ultimoRF = 0
+
+  // Preenche com dados reais
+  dados.forEach(d => {
+    dadosMap[d.mes] = d
+  })
+
+  // Constrói array com todos os meses, acumulando valores
+  const dadosFiltrados = mesesPeriodo.map(mes => {
+    if (dadosMap[mes]) {
+      ultimoTotal = dadosMap[mes].patrimonio
+      ultimoMetas = dadosMap[mes].metas
+      ultimoAcoes = dadosMap[mes].acoes
+      ultimoRF = dadosMap[mes].renda_fixa
+    }
+    return {
+      mes: mes.substring(5), // mostra só MM
+      mesCompleto: mes,
+      patrimonio: ultimoTotal,
+      metas: ultimoMetas,
+      acoes: ultimoAcoes,
+      renda_fixa: ultimoRF,
+    }
+  })
+
+  const ultimoPonto = dadosFiltrados[dadosFiltrados.length - 1]
+
+  const legendaItems = [
+    { cor: '#7C3AED', label: 'Total', chave: 'patrimonio' },
+    { cor: '#A78BFA', label: 'Metas', chave: 'metas' },
+    { cor: '#FBBF24', label: 'Ações/FIIs', chave: 'acoes' },
+    { cor: '#34D399', label: 'Renda Fixa', chave: 'renda_fixa' },
+  ]
+
+  return (
+    <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '20px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px' }}>
+          Evolução do patrimônio
+        </div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', background: '#0F0F14', borderRadius: '8px', padding: '3px', gap: '2px' }}>
+            {[{ key: 'total', label: 'Total' }, { key: 'descritivo', label: 'Detalhado' }].map(m => (
+              <button key={m.key} onClick={() => setModo(m.key)} style={{
+                padding: '4px 10px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px',
+                fontWeight: modo === m.key ? '600' : '400',
+                background: modo === m.key ? '#1E1E2E' : 'transparent',
+                color: modo === m.key ? '#A78BFA' : '#6B6B8A',
+              }}>{m.label}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {['3', '6', '12'].map(p => (
+              <button key={p} onClick={() => setPeriodo(p)} style={{
+                padding: '4px 10px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px',
+                fontWeight: periodo === p ? '600' : '400',
+                background: periodo === p ? 'rgba(167,139,250,0.15)' : '#1E1E2E',
+                color: periodo === p ? '#A78BFA' : '#6B6B8A',
+              }}>{p}m</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={dadosFiltrados} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1E1E2E" vertical={false} />
+              <XAxis
+                dataKey="mes"
+                tick={{ fill: '#6B6B8A', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: '#6B6B8A', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                width={35}
+              />
+              <Tooltip
+                contentStyle={{ background: '#1A1A24', border: '1px solid #2D2D42', borderRadius: '8px', color: '#E8E8F0', fontSize: '12px' }}
+                formatter={(v, name) => [fmt(v), name]}
+                labelFormatter={label => `Mês: ${label}`}
+              />
+              {modo === 'total' ? (
+                <Line
+                  type="monotone"
+                  dataKey="patrimonio"
+                  name="Total"
+                  stroke="#7C3AED"
+                  strokeWidth={2.5}
+                  dot={{ fill: '#7C3AED', r: 4, strokeWidth: 0 }}
+                  activeDot={{ r: 6, fill: '#A78BFA' }}
+                />
+              ) : (
+                <>
+                  <Line type="monotone" dataKey="patrimonio" name="Total" stroke="#7C3AED" strokeWidth={2} strokeDasharray="5 3" dot={false} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="metas" name="Metas" stroke="#A78BFA" strokeWidth={2} dot={{ fill: '#A78BFA', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="acoes" name="Ações/FIIs" stroke="#FBBF24" strokeWidth={2} dot={{ fill: '#FBBF24', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="renda_fixa" name="Renda Fixa" stroke="#34D399" strokeWidth={2} dot={{ fill: '#34D399', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                </>
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Legenda */}
+        {modo === 'descritivo' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '110px', paddingTop: '16px' }}>
+            {legendaItems.map(item => (
+              <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '14px', height: '3px', background: item.cor, borderRadius: '2px', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '11px', color: '#6B6B8A' }}>{item.label}</div>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: item.cor }}>{fmt(ultimoPonto?.[item.chave] ?? 0)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ModalDetalhes({ titulo, transacoes, onClose }) {
   const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
   const corTipo = { receita: '#34D399', despesa: '#F87171', investimento: '#A78BFA' }
   const bgTipo = { receita: 'rgba(52,211,153,0.1)', despesa: 'rgba(248,113,113,0.1)', investimento: 'rgba(167,139,250,0.1)' }
-
-  // Calcula saldo real: receitas somam, despesas e investimentos subtraem
-  const saldoReal = transacoes.reduce((acc, t) => {
-    if (t.tipo === 'receita') return acc + t.valor
-    return acc - t.valor
-  }, 0)
+  const saldoReal = transacoes.reduce((acc, t) => t.tipo === 'receita' ? acc + t.valor : acc - t.valor, 0)
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
@@ -46,34 +188,26 @@ function ModalDetalhes({ titulo, transacoes, onClose }) {
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {transacoes.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#6B6B8A', padding: '32px' }}>Nenhum lançamento encontrado</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {transacoes.map((t, i) => (
-                <div key={t.id} style={{ padding: '12px 0', borderBottom: i < transacoes.length - 1 ? '1px solid #1E1E2E' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#E8E8F0', marginBottom: '4px' }}>{t.descricao}</div>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '12px', color: '#6B6B8A' }}>{new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                      <span style={{ background: bgTipo[t.tipo], color: corTipo[t.tipo], padding: '1px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>
-                        {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
-                      </span>
-                      {t.categoria && <span style={{ fontSize: '11px', color: '#6B6B8A', background: '#1E1E2E', padding: '1px 8px', borderRadius: '4px' }}>{t.categoria}</span>}
-                    </div>
-                    {t.observacao && (
-                      <div style={{ fontSize: '12px', color: '#6B6B8A', marginTop: '4px', fontStyle: 'italic' }}>
-                        📝 {t.observacao}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ fontWeight: '700', color: t.tipo === 'receita' ? '#34D399' : '#F87171', fontSize: '15px', whiteSpace: 'nowrap' }}>
-                    {t.tipo === 'receita' ? '+' : '-'} {fmt(t.valor)}
-                  </div>
+          ) : transacoes.map((t, i) => (
+            <div key={t.id} style={{ padding: '12px 0', borderBottom: i < transacoes.length - 1 ? '1px solid #1E1E2E' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '14px', fontWeight: '500', color: '#E8E8F0', marginBottom: '4px' }}>{t.descricao}</div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '12px', color: '#6B6B8A' }}>{new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                  <span style={{ background: bgTipo[t.tipo], color: corTipo[t.tipo], padding: '1px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>
+                    {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+                  </span>
+                  {t.status === 'agendado' && <span style={{ background: 'rgba(167,139,250,0.15)', color: '#A78BFA', padding: '1px 8px', borderRadius: '4px', fontSize: '11px' }}>⏰ Agendado</span>}
                 </div>
-              ))}
+                {t.observacao && <div style={{ fontSize: '12px', color: '#6B6B8A', marginTop: '4px', fontStyle: 'italic' }}>📝 {t.observacao}</div>}
+              </div>
+              <div style={{ fontWeight: '700', color: t.tipo === 'receita' ? '#34D399' : '#F87171', fontSize: '15px', whiteSpace: 'nowrap' }}>
+                {t.tipo === 'receita' ? '+' : '-'} {fmt(t.valor)}
+              </div>
             </div>
-          )}
+          ))}
         </div>
-        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #1E1E2E', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #1E1E2E', display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ fontSize: '13px', color: '#6B6B8A' }}>{transacoes.length} lançamento(s)</span>
           <span style={{ fontSize: '15px', fontWeight: '700', color: saldoReal >= 0 ? '#34D399' : '#F87171' }}>
             Saldo: {saldoReal >= 0 ? '+' : ''}{fmt(saldoReal)}
@@ -110,7 +244,7 @@ function ModalAlocacao({ pct, onClose, onSalvar }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6B6B8A', cursor: 'pointer', fontSize: '20px' }}>✕</button>
         </div>
         <p style={{ fontSize: '13px', color: '#6B6B8A', marginBottom: '24px' }}>
-          Percentuais aplicados sobre a <strong style={{ color: '#E8E8F0' }}>receita bruta</strong> do mês. Devem somar 100%.
+          Percentuais sobre a <strong style={{ color: '#E8E8F0' }}>receita bruta</strong> do mês. Devem somar 100%.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
           {[
@@ -122,8 +256,7 @@ function ModalAlocacao({ pct, onClose, onSalvar }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label style={{ fontSize: '14px', color: '#E8E8F0', fontWeight: '500' }}>{item.label}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="number" min="0" max="100" value={form[item.key]}
-                    onChange={e => setForm({ ...form, [item.key]: e.target.value })}
+                  <input type="number" min="0" max="100" value={form[item.key]} onChange={e => setForm({ ...form, [item.key]: e.target.value })}
                     style={{ width: '70px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #2D2D42', background: '#0F0F14', color: item.cor, fontWeight: '700', fontSize: '16px', textAlign: 'center' }} />
                   <span style={{ color: item.cor, fontWeight: '700' }}>%</span>
                 </div>
@@ -221,9 +354,11 @@ function ModalResgatar({ meta, metas, onClose, onConfirm }) {
 
 function Dashboard() {
   const [resumo, setResumo] = useState(null)
+  const [resumoComAgendados, setResumoComAgendados] = useState(null)
   const [metas, setMetas] = useState([])
   const [patrimonio, setPatrimonio] = useState([])
   const [patrimonioCompleto, setPatrimonioCompleto] = useState(null)
+  const [investidoMes, setInvestidoMes] = useState(null)
   const [todasTransacoes, setTodasTransacoes] = useState([])
   const [agendados, setAgendados] = useState([])
   const [periodo, setPeriodo] = useState('6')
@@ -238,18 +373,19 @@ function Dashboard() {
 
   const carregar = () => {
     api.get(`/transacoes/resumo?mes=${mes}&ano=${ano}`).then(r => setResumo(r.data))
+    api.get(`/transacoes/resumo?mes=${mes}&ano=${ano}&incluir_agendados=true`).then(r => setResumoComAgendados(r.data))
     api.get('/metas').then(r => setMetas(r.data))
-    api.get('/transacoes/patrimonio').then(r => setPatrimonio(r.data))
+    api.get('/transacoes/patrimonio-grafico').then(r => setPatrimonio(r.data))
     api.get('/transacoes/patrimonio-completo').then(r => setPatrimonioCompleto(r.data))
     api.get(`/transacoes?mes=${mes}&ano=${ano}`).then(r => setTodasTransacoes(r.data))
     api.get('/preferencias').then(r => setPct(r.data))
     api.get('/transacoes/agendados').then(r => setAgendados(r.data))
+    api.get(`/transacoes/investido-mes?mes=${mes}&ano=${ano}`).then(r => setInvestidoMes(r.data))
   }
 
   useEffect(() => { carregar() }, [])
 
   const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-  const dadosGrafico = patrimonio.slice(-parseInt(periodo))
   const saude = resumo?.saude_financeira ? SAUDE_INFO[resumo.saude_financeira] : null
   const metasAtivas = metas.filter(m => ['ativa', 'pausada'].includes(m.status))
 
@@ -259,17 +395,6 @@ function Dashboard() {
     carregar()
   }
 
-  const abrirDetalhes = (tipo, titulo) => {
-    const filtradas = todasTransacoes.filter(t => t.tipo === tipo && t.status === 'confirmado')
-    setModalDetalhes({ titulo, transacoes: filtradas })
-  }
-
-  const abrirDetalhesSaldo = () => {
-    const confirmados = todasTransacoes.filter(t => t.status === 'confirmado')
-    setModalDetalhes({ titulo: 'Todos os lançamentos do mês', transacoes: confirmados })
-  }
-
-  // Sugestão baseada na receita bruta
   const receitaBruta = resumo?.receitas ?? 0
   const sugestao = {
     investimento: Math.round(receitaBruta * (pct.pct_investimento / 100) * 100) / 100,
@@ -281,6 +406,10 @@ function Dashboard() {
   const colsGrafico = isMobile || isTablet ? '1fr' : '2fr 1fr'
   const padding = isMobile ? '16px' : '32px'
 
+  // Mostra previsão do mês (confirmados + agendados)
+  const previsaoSaldo = resumoComAgendados?.saldo_livre ?? resumo?.saldo_livre ?? 0
+  const temAgendados = agendados.length > 0
+
   return (
     <div style={{ padding, maxWidth: '1100px', margin: '0 auto' }}>
 
@@ -288,6 +417,7 @@ function Dashboard() {
       {modalDetalhes && <ModalDetalhes titulo={modalDetalhes.titulo} transacoes={modalDetalhes.transacoes} onClose={() => setModalDetalhes(null)} />}
       {modalAlocacao && <ModalAlocacao pct={pct} onClose={() => setModalAlocacao(false)} onSalvar={() => { setModalAlocacao(false); carregar() }} />}
 
+      {/* Header */}
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: '700', color: '#E8E8F0', letterSpacing: '-0.5px' }}>Visão geral</h1>
         <p style={{ color: '#6B6B8A', fontSize: '13px', marginTop: '4px' }}>
@@ -297,22 +427,33 @@ function Dashboard() {
 
       <BannerMetaConcluida metas={metas} onResgatar={setModalMeta} />
 
-      {/* Banner agendados */}
-      {agendados.length > 0 && (
-        <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '12px', padding: '12px 16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <span style={{ fontSize: '13px', color: '#A78BFA' }}>
-            ⏰ Você tem <strong>{agendados.length}</strong> lançamento(s) agendado(s) para datas futuras — não estão contabilizados ainda.
-          </span>
+      {/* Banner previsão com agendados */}
+      {temAgendados && resumoComAgendados && (
+        <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '12px', padding: '14px 16px', marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', color: '#A78BFA', fontWeight: '600', marginBottom: '6px' }}>
+            ⏰ Previsão do mês incluindo {agendados.length} lançamento(s) agendado(s):
+          </div>
+          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', color: '#A0A0C0' }}>
+              Receitas previstas: <strong style={{ color: '#34D399' }}>{fmt(resumoComAgendados.receitas)}</strong>
+            </span>
+            <span style={{ fontSize: '13px', color: '#A0A0C0' }}>
+              Despesas previstas: <strong style={{ color: '#F87171' }}>{fmt(resumoComAgendados.total_despesas)}</strong>
+            </span>
+            <span style={{ fontSize: '13px', color: '#A0A0C0' }}>
+              Saldo previsto: <strong style={{ color: previsaoSaldo >= 0 ? '#FBBF24' : '#F87171' }}>{fmt(previsaoSaldo)}</strong>
+            </span>
+          </div>
         </div>
       )}
 
-      {/* Cards */}
+      {/* Cards — valores confirmados */}
       <div style={{ display: 'grid', gridTemplateColumns: colsCards, gap: '12px', marginBottom: '16px' }}>
         {[
-          { label: 'Receitas do mês', valor: resumo?.receitas, cor: '#34D399', bg: 'rgba(52,211,153,0.08)', border: 'rgba(52,211,153,0.15)', tooltip: 'Tudo que entrou de dinheiro este mês (apenas confirmados).', onClick: () => abrirDetalhes('receita', 'Receitas do mês') },
-          { label: 'Despesas do mês', valor: resumo?.total_despesas, cor: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.15)', tooltip: 'Soma de todas as despesas fixas e variáveis confirmadas.', onClick: () => abrirDetalhes('despesa', 'Despesas do mês') },
-          { label: 'Investido', valor: resumo?.investimentos, cor: '#A78BFA', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.15)', tooltip: 'Aportes em metas confirmados este mês.', onClick: () => abrirDetalhes('investimento', 'Investimentos do mês') },
-          { label: 'Saldo livre', valor: resumo?.saldo_livre, cor: '#FBBF24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.15)', tooltip: 'O que sobrou após despesas e investimentos confirmados.', onClick: abrirDetalhesSaldo },
+          { label: 'Receitas do mês', valor: resumo?.receitas, cor: '#34D399', bg: 'rgba(52,211,153,0.08)', border: 'rgba(52,211,153,0.15)', tooltip: 'Receitas confirmadas este mês.', onClick: () => setModalDetalhes({ titulo: 'Receitas do mês', transacoes: todasTransacoes.filter(t => t.tipo === 'receita') }) },
+          { label: 'Despesas do mês', valor: resumo?.total_despesas, cor: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.15)', tooltip: 'Despesas confirmadas este mês.', onClick: () => setModalDetalhes({ titulo: 'Despesas do mês', transacoes: todasTransacoes.filter(t => t.tipo === 'despesa') }) },
+          { label: 'Investido', valor: investidoMes?.total ?? resumo?.investimentos, cor: '#A78BFA', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.15)', tooltip: 'Total investido no mês: metas, ações e renda fixa.', onClick: () => setModalDetalhes({ titulo: 'Investimentos do mês', transacoes: todasTransacoes.filter(t => t.tipo === 'investimento') }) },
+          { label: 'Saldo livre', valor: resumo?.saldo_livre, cor: '#FBBF24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.15)', tooltip: 'O que sobrou após despesas e investimentos confirmados.', onClick: () => setModalDetalhes({ titulo: 'Todos os lançamentos', transacoes: todasTransacoes }) },
         ].map(card => (
           <div key={card.label} onClick={card.onClick} style={{ background: card.bg, border: `1px solid ${card.border}`, borderRadius: '16px', padding: '16px', cursor: 'pointer', transition: 'opacity 0.15s' }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
@@ -326,7 +467,7 @@ function Dashboard() {
         ))}
       </div>
 
-      {/* Patrimônio completo */}
+      {/* Patrimônio total */}
       {patrimonioCompleto && (
         <div style={{ background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)', borderRadius: '16px', padding: '16px 20px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
@@ -338,17 +479,12 @@ function Dashboard() {
                 {fmt(patrimonioCompleto.total_geral)}
               </div>
             </div>
-            {resumo?.investimentos > 0 && (
-              <div style={{ fontSize: '13px', color: '#34D399', fontWeight: '600' }}>
-                + {fmt(resumo.investimentos)} este mês
-              </div>
-            )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '10px' }}>
             {[
-              { label: 'Metas', valor: patrimonioCompleto.metas, cor: '#A78BFA', bg: 'rgba(167,139,250,0.08)', tooltip: 'Soma acumulada nas metas ativas, pausadas e concluídas.' },
-              { label: 'Ações / FIIs / ETFs', valor: patrimonioCompleto.acoes, cor: '#FBBF24', bg: 'rgba(251,191,36,0.08)', tooltip: 'Total investido em renda variável (preço de custo).' },
-              { label: 'Renda Fixa', valor: patrimonioCompleto.renda_fixa, cor: '#34D399', bg: 'rgba(52,211,153,0.08)', tooltip: 'Total aplicado em CDBs, Tesouro, LCI, LCA e outros.' },
+              { label: 'Metas', valor: patrimonioCompleto.metas, cor: '#A78BFA', bg: 'rgba(167,139,250,0.08)', tooltip: 'Soma acumulada nas metas ativas.' },
+              { label: 'Ações / FIIs / ETFs', valor: patrimonioCompleto.acoes, cor: '#FBBF24', bg: 'rgba(251,191,36,0.08)', tooltip: 'Total investido em renda variável.' },
+              { label: 'Renda Fixa', valor: patrimonioCompleto.renda_fixa, cor: '#34D399', bg: 'rgba(52,211,153,0.08)', tooltip: 'Total em CDBs, Tesouro, LCI, LCA.' },
             ].map(item => (
               <div key={item.label} style={{ background: item.bg, borderRadius: '10px', padding: '12px 14px' }}>
                 <div style={{ fontSize: '11px', color: '#6B6B8A', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
@@ -390,52 +526,19 @@ function Dashboard() {
 
       {/* Gráfico + Sugestão */}
       <div style={{ display: 'grid', gridTemplateColumns: colsGrafico, gap: '16px', marginBottom: '16px' }}>
-        <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center' }}>
-              Evolução do patrimônio <InfoTooltip texto="Aportes acumulados ao longo do tempo." />
-            </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {['3', '6', '12'].map(p => (
-                <button key={p} onClick={() => setPeriodo(p)} style={{ padding: '4px 10px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: periodo === p ? '600' : '400', background: periodo === p ? 'rgba(167,139,250,0.15)' : '#1E1E2E', color: periodo === p ? '#A78BFA' : '#6B6B8A' }}>{p}m</button>
-              ))}
-            </div>
-          </div>
-          {dadosGrafico.length === 0 ? (
-            <div style={{ height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B6B8A', fontSize: '13px' }}>
-              Nenhum investimento registrado ainda
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={dadosGrafico}>
-                <defs>
-                  <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="mes" tick={{ fill: '#6B6B8A', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#6B6B8A', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ background: '#1A1A24', border: '1px solid #2D2D42', borderRadius: '8px', color: '#E8E8F0', fontSize: '12px' }} formatter={v => [fmt(v), 'Patrimônio']} />
-                <Area type="monotone" dataKey="patrimonio" stroke="#7C3AED" strokeWidth={2.5} fill="url(#grad)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+        <GraficoPatrimonio dados={patrimonio} periodo={periodo} setPeriodo={setPeriodo} fmt={fmt} />
 
         <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center' }}>
-              Sugestão <InfoTooltip texto="Baseado na sua receita bruta do mês — não muda conforme você gasta." />
+              Sugestão <InfoTooltip texto="Baseado na sua receita bruta do mês." />
             </div>
             <button onClick={() => setModalAlocacao(true)} style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', color: '#A78BFA', cursor: 'pointer', fontSize: '11px', padding: '4px 10px', borderRadius: '6px', fontWeight: '600' }}>
               ⚙️ Personalizar
             </button>
           </div>
           {receitaBruta <= 0 ? (
-            <div style={{ color: '#6B6B8A', fontSize: '13px' }}>
-              Lance suas receitas do mês para ver a sugestão.
-            </div>
+            <div style={{ color: '#6B6B8A', fontSize: '13px' }}>Lance suas receitas do mês para ver a sugestão.</div>
           ) : (
             <>
               <div style={{ fontSize: '12px', color: '#6B6B8A', marginBottom: '14px' }}>
@@ -445,7 +548,7 @@ function Dashboard() {
                 {[
                   { label: 'Investir', pct: `${pct.pct_investimento}%`, valor: sugestao.investimento, cor: '#34D399', tooltip: 'Recomendado investir ao menos 20% da renda.' },
                   { label: 'Lazer', pct: `${pct.pct_lazer}%`, valor: sugestao.lazer, cor: '#FBBF24', tooltip: 'Reserve parte para seu bem-estar.' },
-                  { label: 'Gastos pessoais', pct: `${pct.pct_gastos}%`, valor: sugestao.gastos_pessoais, cor: '#F87171', tooltip: 'Margem para imprevistos e compras pessoais.' },
+                  { label: 'Gastos pessoais', pct: `${pct.pct_gastos}%`, valor: sugestao.gastos_pessoais, cor: '#F87171', tooltip: 'Margem para imprevistos.' },
                 ].map(item => (
                   <div key={item.label}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>

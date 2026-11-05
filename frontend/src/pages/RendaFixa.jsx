@@ -37,13 +37,16 @@ function RendaFixa() {
   const [abaAtiva, setAbaAtiva] = useState('lista')
   const [form, setForm] = useState({
     instituicao: '', tipo: 'cdb', valor_investido: '', taxa: '',
-    tipo_rendimento: 'cdi', data_aplicacao: '', data_vencimento: '', observacao: ''
+    tipo_rendimento: 'cdi', data_aplicacao: '', data_vencimento: '',
+    observacao: '', meta_id: ''
   })
+  const [metas, setMetas] = useState([])
   const { isMobile } = useWindowSize()
 
   const carregar = () => {
     api.get('/renda-fixa').then(r => setItens(r.data))
     api.get('/renda-fixa/resumo').then(r => setResumo(r.data))
+    api.get('/metas').then(r => setMetas(r.data.filter(m => m.status === 'ativa')))
   }
 
   useEffect(() => { carregar() }, [])
@@ -58,6 +61,7 @@ function RendaFixa() {
       ...form,
       valor_investido: parseFloat(form.valor_investido),
       data_vencimento: form.data_vencimento || null,
+      meta_id: form.meta_id ? parseInt(form.meta_id) : null,
     })
     setForm({ instituicao: '', tipo: 'cdb', valor_investido: '', taxa: '', tipo_rendimento: 'cdi', data_aplicacao: '', data_vencimento: '', observacao: '' })
     carregar()
@@ -198,6 +202,21 @@ function RendaFixa() {
             <div style={{ gridColumn: isMobile ? '1' : 'span 3' }}>
               <label style={labelStyle}>Observação (opcional)</label>
               <input placeholder="Alguma anotação" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+            </div>
+            <div style={{ gridColumn: isMobile ? '1' : 'span 3' }}>
+              <label style={labelStyle}>Vincular a uma meta (opcional)</label>
+              <select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })}
+                style={{ ...inputStyle, marginTop: '6px', color: form.meta_id ? '#E8E8F0' : '#6B6B8A' }}>
+                <option value="">Nenhuma — só conta no patrimônio</option>
+                {metas.map(m => (
+                  <option key={m.id} value={m.id}>{m.titulo} — {fmt(m.valor_atual)} / {fmt(m.valor_alvo)}</option>
+                ))}
+              </select>
+              {form.meta_id && (
+                <div style={{ fontSize: '12px', color: '#34D399', marginTop: '6px' }}>
+                  ✓ O valor desta aplicação será somado ao progresso da meta selecionada
+                </div>
+              )}
             </div>
           </div>
 

@@ -7,10 +7,11 @@ class Acao(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     ticker = Column(String, nullable=False)
-    tipo = Column(String, nullable=False, default="acao")  # acao, fii, etf, bdr
+    tipo = Column(String, nullable=False, default="acao")
     quantidade = Column(Float, nullable=False)
     preco_pago = Column(Float, nullable=False)
     data_compra = Column(Date, nullable=False)
     corretora = Column(String, nullable=True)
     observacao = Column(String, nullable=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    meta_id = Column(Integer, ForeignKey("metas.id"), nullable=True)

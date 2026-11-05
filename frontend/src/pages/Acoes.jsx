@@ -77,13 +77,16 @@ function Acoes() {
   const [loading, setLoading] = useState(false)
   const [abaAtiva, setAbaAtiva] = useState('carteira')
   const [form, setForm] = useState({
-    ticker: '', tipo: 'acao', quantidade: '', preco_pago: '', data_compra: '', corretora: '', observacao: ''
-  })
+  ticker: '', tipo: 'acao', quantidade: '', preco_pago: '',
+  data_compra: '', corretora: '', observacao: '', meta_id: ''
+})
+  const [metas, setMetas] = useState([])
   const { isMobile } = useWindowSize()
 
   const carregar = () => {
-    api.get('/acoes/carteira').then(r => setCarteira(r.data))
-  }
+  api.get('/acoes/carteira').then(r => setCarteira(r.data))
+  api.get('/metas').then(r => setMetas(r.data.filter(m => m.status === 'ativa')))
+}
 
   useEffect(() => { carregar() }, [])
 
@@ -107,6 +110,7 @@ function Acoes() {
       ticker: form.ticker.toUpperCase().trim(),
       quantidade: parseFloat(form.quantidade),
       preco_pago: parseFloat(form.preco_pago),
+      meta_id: form.meta_id ? parseInt(form.meta_id) : null,
     })
     setForm({ ticker: '', tipo: 'acao', quantidade: '', preco_pago: '', data_compra: '', corretora: '', observacao: '' })
     setTickerInfo(null)
@@ -239,6 +243,21 @@ function Acoes() {
             <div>
               <label style={labelStyle}>Observação (opcional)</label>
               <input placeholder="Alguma anotação" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+            </div>
+            <div style={{ gridColumn: isMobile ? '1' : 'span 3' }}>
+              <label style={labelStyle}>Vincular a uma meta (opcional)</label>
+              <select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })}
+                style={{ ...inputStyle, marginTop: '6px', color: form.meta_id ? '#E8E8F0' : '#6B6B8A' }}>
+                <option value="">Nenhuma — só conta no patrimônio</option>
+                {metas.map(m => (
+                  <option key={m.id} value={m.id}>{m.titulo} — {fmt(m.valor_atual)} / {fmt(m.valor_alvo)}</option>
+                ))}
+              </select>
+              {form.meta_id && (
+                <div style={{ fontSize: '12px', color: '#34D399', marginTop: '6px' }}>
+                  ✓ O valor desta compra será somado ao progresso da meta selecionada
+                </div>
+              )}
             </div>
           </div>
 
