@@ -73,7 +73,11 @@ function Login() {
               </div>
             </div>
           </div>
-
+          <div style={{ textAlign: 'right', marginTop: '-12px', marginBottom: '16px' }}>
+            <Link to="/esqueci-senha" style={{ color: '#A78BFA', fontSize: '13px', textDecoration: 'none' }}>
+              Esqueci minha senha
+            </Link>
+          </div>
           <button onClick={entrar} disabled={loading} style={btnStyle}>
             {loading ? 'Entrando...' : 'Entrar'}
           </button>

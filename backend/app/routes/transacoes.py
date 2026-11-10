@@ -429,15 +429,33 @@ def atualizar_transacao(
     db.refresh(db_transacao)
     return db_transacao
 
+SERIES_RECORRENTES = ["fixa", "fixa_parcelada", "fixa_com_prazo"]
+
 @router.delete("/{id}")
 def deletar_transacao(
     id: int,
+    escopo: str = "este",
     db: Session = Depends(get_db),
     usuario=Depends(get_usuario_atual)
 ):
     transacao = db.query(Transacao).filter(Transacao.id == id, Transacao.usuario_id == usuario.id).first()
     if not transacao:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada")
+
+    # Apaga este lançamento e todos os seguintes da mesma série
+    if escopo == "futuras" and transacao.tipo == TipoTransacao.despesa and transacao.subtipo in SERIES_RECORRENTES:
+        removidas = db.query(Transacao).filter(
+            Transacao.usuario_id == usuario.id,
+            Transacao.tipo == transacao.tipo,
+            Transacao.subtipo == transacao.subtipo,
+            Transacao.descricao == transacao.descricao,
+            Transacao.categoria == transacao.categoria,
+            Transacao.valor == transacao.valor,
+            Transacao.observacao == transacao.observacao,
+            Transacao.data >= transacao.data,
+        ).delete(synchronize_session=False)
+        db.commit()
+        return {"mensagem": f"{removidas} lancamento(s) deletado(s)"}
 
     if transacao.tipo == TipoTransacao.investimento and transacao.meta_id and transacao.status == 'confirmado':
         meta = db.query(Meta).filter(Meta.id == transacao.meta_id, Meta.usuario_id == usuario.id).first()

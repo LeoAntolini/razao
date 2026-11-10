@@ -2,7 +2,7 @@ import axios from 'axios'
 import { getToken, logout } from './auth'
 
 const api = axios.create({
-  baseURL: 'https://razao-backend.onrender.com'
+  baseURL: import.meta.env.VITE_API_URL || 'https://razao-backend.onrender.com'
 })
 
 api.interceptors.request.use(config => {

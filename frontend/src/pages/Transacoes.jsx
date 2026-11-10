@@ -26,6 +26,7 @@ const SUBTIPOS_DESPESA = [
   { value: 'sazonal', label: 'Sazonal' },
 ]
 
+const SERIES = ['fixa', 'fixa_parcelada', 'fixa_com_prazo']
 const CORES_PIZZA = ['#F87171', '#FB923C', '#A78BFA', '#34D399']
 
 function TooltipInfo({ texto }) {
@@ -40,6 +41,45 @@ function TooltipInfo({ texto }) {
         </span>
       )}
     </span>
+  )
+}
+
+function ModalDeletar({ transacao, onClose, onConfirmar }) {
+  const [loading, setLoading] = useState(false)
+  const dataFmt = new Date(transacao.data + 'T00:00:00').toLocaleDateString('pt-BR')
+
+  const escolher = async (escopo) => {
+    setLoading(true)
+    await onConfirmar(escopo)
+    setLoading(false)
+  }
+
+  const opcoes = [
+    { escopo: 'este', titulo: 'Apenas este mês', desc: `Remove só o lançamento de ${dataFmt}. Os outros meses continuam.`, cor: '#FBBF24' },
+    { escopo: 'futuras', titulo: 'Este e todos os próximos meses', desc: `Remove o lançamento de ${dataFmt} e todos os seguintes. Os meses anteriores ficam no histórico.`, cor: '#F87171' },
+  ]
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
+      <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '20px', padding: '24px', maxWidth: '460px', width: '100%' }}>
+        <div style={{ fontSize: '18px', fontWeight: '700', color: '#E8E8F0', marginBottom: '6px' }}>🗑️ Deletar lançamento recorrente</div>
+        <div style={{ fontSize: '13px', color: '#6B6B8A', marginBottom: '20px' }}>{transacao.descricao} — {dataFmt}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+          {opcoes.map(op => (
+            <button key={op.escopo} disabled={loading} onClick={() => escolher(op.escopo)}
+              style={{ textAlign: 'left', background: '#0F0F14', border: '1px solid #2D2D42', borderRadius: '12px', padding: '14px 16px', cursor: loading ? 'wait' : 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = op.cor}
+              onMouseLeave={e => e.currentTarget.style.borderColor = '#2D2D42'}>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: op.cor, marginBottom: '4px' }}>{op.titulo}</div>
+              <div style={{ fontSize: '12px', color: '#6B6B8A', lineHeight: '1.5' }}>{op.desc}</div>
+            </button>
+          ))}
+        </div>
+        <button onClick={onClose} disabled={loading} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #2D2D42', background: 'none', color: '#6B6B8A', cursor: 'pointer' }}>
+          Cancelar
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -130,6 +170,7 @@ function Transacoes() {
   const [aba, setAba] = useState('lancamentos')
   const [loading, setLoading] = useState(false)
   const [editando, setEditando] = useState(null)
+  const [deletando, setDeletando] = useState(null)
   const [form, setForm] = useState({
     valor: '', tipo: 'receita', subtipo: 'variavel',
     categoria: 'Salário', data: '', meta_id: '',
@@ -161,7 +202,6 @@ function Transacoes() {
       : form.tipo === 'investimento' ? `Aporte — ${metas.find(m => m.id == form.meta_id)?.titulo ?? 'Meta'}`
       : `${form.categoria} (${SUBTIPOS_DESPESA.find(s => s.value === form.subtipo)?.label ?? ''})`
 
-    // Para fixa_com_prazo, guarda a data fim na observação
     const observacaoFinal = form.subtipo === 'fixa_com_prazo' && form.data_fim
       ? `${form.data_fim}${form.observacao ? '|' + form.observacao : ''}`
       : form.observacao || null
@@ -187,9 +227,16 @@ function Transacoes() {
     setLoading(false)
   }
 
-  const deletar = async (id) => {
+  // Recorrentes abrem o modal com as 2 opções; os demais só pedem confirmação
+  const pedirDelete = (t) => {
+    if (t.tipo === 'despesa' && SERIES.includes(t.subtipo)) { setDeletando(t); return }
     if (!window.confirm('Deletar esta transação?')) return
-    await api.delete(`/transacoes/${id}`)
+    api.delete(`/transacoes/${t.id}`).then(carregar)
+  }
+
+  const confirmarDelete = async (escopo) => {
+    await api.delete(`/transacoes/${deletando.id}?escopo=${escopo}`)
+    setDeletando(null)
     carregar()
   }
 
@@ -221,7 +268,6 @@ function Transacoes() {
   const padding = isMobile ? '16px' : '32px'
   const gridForm = isMobile ? '1fr' : 'repeat(3, 1fr)'
 
-  // Extrai data_fim da observação para exibir no histórico
   const extrairDataFim = (obs) => {
     if (!obs) return null
     const partes = obs.split('|')
@@ -255,14 +301,10 @@ function Transacoes() {
           )}
         </div>
         {t.subtipo === 'fixa_com_prazo' && extrairDataFim(t.observacao) && (
-          <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '2px' }}>
-            📅 Até: {extrairDataFim(t.observacao)}
-          </div>
+          <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '2px' }}>📅 Até: {extrairDataFim(t.observacao)}</div>
         )}
         {extrairObs(t.observacao, t.subtipo) && (
-          <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '2px', fontStyle: 'italic' }}>
-            📝 {extrairObs(t.observacao, t.subtipo)}
-          </div>
+          <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '2px', fontStyle: 'italic' }}>📝 {extrairObs(t.observacao, t.subtipo)}</div>
         )}
       </td>
       <td style={{ padding: '12px 16px' }}>
@@ -286,7 +328,7 @@ function Transacoes() {
           <button onClick={() => setEditando(t)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#A78BFA', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
             onMouseEnter={e => e.target.style.background = 'rgba(167,139,250,0.1)'}
             onMouseLeave={e => e.target.style.background = 'none'}>Editar</button>
-          <button onClick={() => deletar(t.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+          <button onClick={() => pedirDelete(t)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
             onMouseEnter={e => { e.target.style.borderColor = '#F87171'; e.target.style.color = '#F87171' }}
             onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.color = '#6B6B8A' }}>Deletar</button>
         </div>
@@ -326,7 +368,7 @@ function Transacoes() {
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
           <button onClick={() => setEditando(t)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#A78BFA', cursor: 'pointer', fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>Editar</button>
-          <button onClick={() => deletar(t.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>Deletar</button>
+          <button onClick={() => pedirDelete(t)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>Deletar</button>
         </div>
       </div>
     </div>
@@ -338,6 +380,9 @@ function Transacoes() {
       {editando && (
         <ModalEditar transacao={editando} metas={metas} onClose={() => setEditando(null)} onSalvar={() => { setEditando(null); carregar() }} />
       )}
+      {deletando && (
+        <ModalDeletar transacao={deletando} onClose={() => setDeletando(null)} onConfirmar={confirmarDelete} />
+      )}
 
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: '700', color: '#E8E8F0', letterSpacing: '-0.5px' }}>Transações</h1>
@@ -348,7 +393,6 @@ function Transacoes() {
       <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: isMobile ? '16px' : '24px', marginBottom: '20px' }}>
         <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>Novo lançamento</div>
 
-        {/* Tipo */}
         <div style={{ marginBottom: '14px' }}>
           <label style={labelStyle}>Tipo de lançamento</label>
           <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
@@ -367,7 +411,6 @@ function Transacoes() {
           </div>
         </div>
 
-        {/* Subtipo despesa */}
         {form.tipo === 'despesa' && (
           <div style={{ marginBottom: '14px' }}>
             <label style={labelStyle}>
@@ -390,14 +433,12 @@ function Transacoes() {
           </div>
         )}
 
-        {/* Info investimento */}
         {form.tipo === 'investimento' && (
           <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: '#A78BFA' }}>
             💜 Investimentos são vinculados a uma meta e somam ao seu patrimônio.
           </div>
         )}
 
-        {/* Info fixa */}
         {form.subtipo === 'fixa' && (
           <div style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: '#F87171' }}>
             🔄 Despesas fixas serão lançadas automaticamente nos próximos 24 meses.
@@ -429,7 +470,6 @@ function Transacoes() {
             </select>
           </div>
 
-          {/* Meta vinculada */}
           {form.tipo === 'investimento' && (
             <div style={{ gridColumn: isMobile ? '1' : 'span 2' }}>
               <label style={labelStyle}>Meta vinculada</label>
@@ -441,7 +481,6 @@ function Transacoes() {
             </div>
           )}
 
-          {/* Nº parcelas */}
           {form.subtipo === 'fixa_parcelada' && (
             <div>
               <label style={labelStyle}>Nº de parcelas</label>
@@ -451,20 +490,16 @@ function Transacoes() {
             </div>
           )}
 
-          {/* Data fim para fixa_com_prazo */}
           {form.subtipo === 'fixa_com_prazo' && (
             <div>
-              <label style={labelStyle}>Data de término <span style={{ color: '#F87171' }}>*</span></label>
+              <label style={labelStyle}>Data de término <span style={{ color: '#F87171', marginLeft: '4px' }}>*</span></label>
               <input type="date" value={form.data_fim}
                 onChange={e => setForm({ ...form, data_fim: e.target.value })}
                 style={{ ...inputStyle, marginTop: '6px' }} />
-              <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '4px' }}>
-                O sistema lança automaticamente até esta data
-              </div>
+              <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '4px' }}>O sistema lança automaticamente até esta data</div>
             </div>
           )}
 
-          {/* Observação */}
           <div style={{ gridColumn: isMobile ? '1' : 'span 3' }}>
             <label style={labelStyle}>Observação (opcional)</label>
             <input placeholder="Alguma anotação" value={form.observacao}

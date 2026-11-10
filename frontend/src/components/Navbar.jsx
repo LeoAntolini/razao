@@ -17,6 +17,7 @@ function Navbar() {
     { path: '/acoes', label: 'Carteira' },
     { path: '/renda-fixa', label: 'Renda Fixa' },
     { path: '/ir', label: 'IR' },
+    { path: '/simulador', label: 'Simulador' },
   ]
 
   const sair = () => {
