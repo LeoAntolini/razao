@@ -13,7 +13,11 @@ const TOOLTIPS = {
   tipo_rendimento: 'Como o rendimento é calculado. Prefixado: taxa fixa. CDI/Selic: varia com a taxa básica. IPCA: varia com a inflação.',
   vencimento: 'Data em que o dinheiro investido volta para você com os rendimentos. LCI/LCA geralmente têm carência mínima.',
   ir: 'CDB, Tesouro e Debêntures têm IR regressivo (22,5% a 15%). LCI/LCA são isentos de IR para pessoas físicas.',
+  ticket: 'Valor médio de cada aplicação: total investido dividido pelo número de aplicações.',
+  isentos: 'Soma das aplicações isentas de IR para pessoa física: LCI, LCA, CRI e CRA.',
 }
+
+const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
 function InfoTooltip({ texto }) {
   const [hover, setHover] = useState(false)
@@ -30,23 +34,144 @@ function InfoTooltip({ texto }) {
   )
 }
 
+function ModalEditarRF({ item, metas, onClose, onSalvo }) {
+  const [form, setForm] = useState({
+    instituicao: item.instituicao,
+    tipo: item.tipo,
+    valor_investido: String(item.valor_investido),
+    taxa: item.taxa || '',
+    tipo_rendimento: item.tipo_rendimento || 'cdi',
+    data_aplicacao: item.data_aplicacao,
+    data_vencimento: item.data_vencimento || '',
+    observacao: item.observacao || '',
+    meta_id: item.meta_id ? String(item.meta_id) : '',
+  })
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+
+  // Mantém a meta atual na lista mesmo que não esteja mais "ativa"
+  const metasDisponiveis = metas.filter(m => m.status === 'ativa' || m.id === item.meta_id)
+
+  const salvar = async () => {
+    if (!form.instituicao.trim() || !form.valor_investido || !form.data_aplicacao) {
+      setErro('Preencha instituição, valor e data de aplicação')
+      return
+    }
+    setLoading(true)
+    setErro('')
+    try {
+      await api.put(`/renda-fixa/${item.id}`, {
+        instituicao: form.instituicao.trim(),
+        tipo: form.tipo,
+        valor_investido: parseFloat(form.valor_investido),
+        taxa: form.taxa || null,
+        tipo_rendimento: form.tipo_rendimento || null,
+        data_aplicacao: form.data_aplicacao,
+        data_vencimento: form.data_vencimento || null,
+        observacao: form.observacao || null,
+        meta_id: form.meta_id ? parseInt(form.meta_id) : null,
+      })
+      onSalvo()
+    } catch (e) {
+      setErro(e.response?.data?.detail ?? 'Não foi possível salvar as alterações')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
+      <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '20px', padding: '24px', maxWidth: '560px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: '18px', fontWeight: '700', color: '#E8E8F0', marginBottom: '20px' }}>✏️ Editar aplicação</div>
+
+        <div style={{ marginBottom: '14px' }}>
+          <label style={labelStyle}>Tipo de ativo</label>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+            {TIPOS_RF.map(t => (
+              <button key={t} onClick={() => setForm({ ...form, tipo: t })} style={{
+                padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px',
+                background: form.tipo === t ? 'rgba(52,211,153,0.15)' : '#1E1E2E',
+                color: form.tipo === t ? '#34D399' : '#6B6B8A',
+                outline: form.tipo === t ? '1px solid #34D399' : 'none',
+                fontWeight: form.tipo === t ? '600' : '400',
+              }}>{TIPO_LABEL[t]}</button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+          <div>
+            <label style={labelStyle}>Instituição</label>
+            <input value={form.instituicao} onChange={e => setForm({ ...form, instituicao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Valor investido (R$)</label>
+            <input type="number" step="any" value={form.valor_investido} onChange={e => setForm({ ...form, valor_investido: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Taxa</label>
+            <input placeholder='Ex: "CDI+2%"' value={form.taxa} onChange={e => setForm({ ...form, taxa: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Tipo de rendimento</label>
+            <select value={form.tipo_rendimento} onChange={e => setForm({ ...form, tipo_rendimento: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }}>
+              {TIPO_RENDIMENTO.map(t => <option key={t} value={t}>{TIPO_REND_LABEL[t]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Data de aplicação</label>
+            <input type="date" value={form.data_aplicacao} onChange={e => setForm({ ...form, data_aplicacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Data de vencimento</label>
+            <input type="date" value={form.data_vencimento} onChange={e => setForm({ ...form, data_vencimento: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div style={{ gridColumn: 'span 2' }}>
+            <label style={labelStyle}>Observação</label>
+            <input value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div style={{ gridColumn: 'span 2' }}>
+            <label style={labelStyle}>Meta vinculada</label>
+            <select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })}
+              style={{ ...inputStyle, marginTop: '6px', color: form.meta_id ? '#E8E8F0' : '#6B6B8A' }}>
+              <option value="">Nenhuma — só conta no patrimônio</option>
+              {metasDisponiveis.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {erro && (
+          <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '8px', padding: '10px', marginBottom: '10px', fontSize: '13px', color: '#F87171' }}>{erro}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #2D2D42', background: 'none', color: '#6B6B8A', cursor: 'pointer' }}>Cancelar</button>
+          <button onClick={salvar} disabled={loading} style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #3E6B52, #34D399)', color: '#fff', fontWeight: '600', cursor: 'pointer' }}>
+            {loading ? 'Salvando...' : 'Salvar alterações'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function RendaFixa() {
   const [itens, setItens] = useState([])
+  const [metas, setMetas] = useState([])
   const [resumo, setResumo] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [editando, setEditando] = useState(null)
   const [abaAtiva, setAbaAtiva] = useState('lista')
   const [form, setForm] = useState({
     instituicao: '', tipo: 'cdb', valor_investido: '', taxa: '',
     tipo_rendimento: 'cdi', data_aplicacao: '', data_vencimento: '',
     observacao: '', meta_id: ''
   })
-  const [metas, setMetas] = useState([])
   const { isMobile } = useWindowSize()
 
   const carregar = () => {
     api.get('/renda-fixa').then(r => setItens(r.data))
     api.get('/renda-fixa/resumo').then(r => setResumo(r.data))
-    api.get('/metas').then(r => setMetas(r.data.filter(m => m.status === 'ativa')))
+    api.get('/metas').then(r => setMetas(r.data))
   }
 
   useEffect(() => { carregar() }, [])
@@ -60,10 +185,12 @@ function RendaFixa() {
     await api.post('/renda-fixa', {
       ...form,
       valor_investido: parseFloat(form.valor_investido),
+      taxa: form.taxa || null,
+      observacao: form.observacao || null,
       data_vencimento: form.data_vencimento || null,
       meta_id: form.meta_id ? parseInt(form.meta_id) : null,
     })
-    setForm({ instituicao: '', tipo: 'cdb', valor_investido: '', taxa: '', tipo_rendimento: 'cdi', data_aplicacao: '', data_vencimento: '', observacao: '' })
+    setForm({ instituicao: '', tipo: 'cdb', valor_investido: '', taxa: '', tipo_rendimento: 'cdi', data_aplicacao: '', data_vencimento: '', observacao: '', meta_id: '' })
     carregar()
     setLoading(false)
   }
@@ -74,16 +201,15 @@ function RendaFixa() {
     carregar()
   }
 
-  const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
   const padding = isMobile ? '16px' : '32px'
   const gridForm = isMobile ? '1fr' : 'repeat(3, 1fr)'
+  const metasAtivas = metas.filter(m => m.status === 'ativa')
 
   const diasParaVencer = (data) => {
     if (!data) return null
     const hoje = new Date()
     const venc = new Date(data + 'T00:00:00')
-    const diff = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24))
-    return diff
+    return Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24))
   }
 
   const corVencimento = (dias) => {
@@ -96,6 +222,15 @@ function RendaFixa() {
 
   return (
     <div style={{ padding, maxWidth: '1100px', margin: '0 auto' }}>
+
+      {editando && (
+        <ModalEditarRF
+          item={editando}
+          metas={metas}
+          onClose={() => setEditando(null)}
+          onSalvo={() => { setEditando(null); carregar() }}
+        />
+      )}
 
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
@@ -123,12 +258,19 @@ function RendaFixa() {
             <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Qtd. de aplicações</div>
             <div style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '700', color: '#A78BFA' }}>{resumo.quantidade}</div>
           </div>
-          {Object.entries(resumo.por_tipo || {}).slice(0, 2).map(([tipo, valor]) => (
-            <div key={tipo} style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '16px' }}>
-              <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>{TIPO_LABEL[tipo] || tipo}</div>
-              <div style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '700', color: '#E8E8F0' }}>{fmt(valor)}</div>
+          <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '16px' }}>
+            <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', display: 'flex', alignItems: 'center' }}>
+              Ticket médio <InfoTooltip texto={TOOLTIPS.ticket} />
             </div>
-          ))}
+            <div style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '700', color: '#E8E8F0' }}>{fmt(resumo.ticket_medio)}</div>
+          </div>
+          <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '16px' }}>
+            <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', display: 'flex', alignItems: 'center' }}>
+              Isentos de IR <InfoTooltip texto={TOOLTIPS.isentos} />
+            </div>
+            <div style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '700', color: '#FBBF24' }}>{fmt(resumo.isentos_ir)}</div>
+            <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '4px' }}>Tributáveis: {fmt(resumo.tributaveis_ir)}</div>
+          </div>
         </div>
       )}
 
@@ -150,11 +292,8 @@ function RendaFixa() {
       {/* Nova aplicação */}
       {abaAtiva === 'nova-aplicacao' && (
         <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: isMobile ? '16px' : '24px', marginBottom: '20px' }}>
-          <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '20px' }}>
-            Registrar aplicação
-          </div>
+          <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '20px' }}>Registrar aplicação</div>
 
-          {/* Tipo */}
           <div style={{ marginBottom: '16px' }}>
             <label style={labelStyle}>Tipo de ativo <InfoTooltip texto={TOOLTIPS.tipo} /></label>
             <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
@@ -208,7 +347,7 @@ function RendaFixa() {
               <select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })}
                 style={{ ...inputStyle, marginTop: '6px', color: form.meta_id ? '#E8E8F0' : '#6B6B8A' }}>
                 <option value="">Nenhuma — só conta no patrimônio</option>
-                {metas.map(m => (
+                {metasAtivas.map(m => (
                   <option key={m.id} value={m.id}>{m.titulo} — {fmt(m.valor_atual)} / {fmt(m.valor_alvo)}</option>
                 ))}
               </select>
@@ -265,9 +404,15 @@ function RendaFixa() {
                         </div>
                       )}
                     </div>
-                    <button onClick={() => deletar(item.id)} style={{ width: '100%', background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '12px', padding: '7px', borderRadius: '8px' }}>
-                      Deletar
-                    </button>
+                    {item.observacao && <div style={{ fontSize: '11px', color: '#6B6B8A', marginBottom: '10px', fontStyle: 'italic' }}>📝 {item.observacao}</div>}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => setEditando(item)} style={{ flex: 1, background: 'none', border: '1px solid #2D2D42', color: '#34D399', cursor: 'pointer', fontSize: '12px', padding: '7px', borderRadius: '8px' }}>
+                        Editar
+                      </button>
+                      <button onClick={() => deletar(item.id)} style={{ flex: 1, background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '12px', padding: '7px', borderRadius: '8px' }}>
+                        Deletar
+                      </button>
+                    </div>
                   </div>
                 )
               })}
@@ -277,7 +422,7 @@ function RendaFixa() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #1E1E2E' }}>
-                    {['Instituição', 'Tipo', 'Valor', 'Taxa', 'Rendimento', 'Aplicação', 'Vencimento', ''].map(h => (
+                    {['Instituição', 'Tipo', 'Valor', 'Taxa', 'Rendimento', 'Aplicação', 'Vencimento', 'Ações'].map(h => (
                       <th key={h} style={{ padding: '14px 16px', textAlign: 'left', fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px' }}>{h}</th>
                     ))}
                   </tr>
@@ -289,7 +434,10 @@ function RendaFixa() {
                       <tr key={item.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #1E1E2E' }}
                         onMouseEnter={e => e.currentTarget.style.background = '#16161F'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <td style={{ ...tdStyle, fontWeight: '600', color: '#E8E8F0' }}>{item.instituicao}</td>
+                        <td style={{ ...tdStyle, color: '#E8E8F0' }}>
+                          <div style={{ fontWeight: '600' }}>{item.instituicao}</div>
+                          {item.observacao && <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '2px', fontStyle: 'italic' }}>📝 {item.observacao}</div>}
+                        </td>
                         <td style={tdStyle}>
                           <span style={{ background: 'rgba(52,211,153,0.1)', color: '#34D399', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '4px' }}>
                             {TIPO_LABEL[item.tipo] || item.tipo}
@@ -308,11 +456,18 @@ function RendaFixa() {
                           ) : '—'}
                         </td>
                         <td style={{ padding: '14px 16px' }}>
-                          <button onClick={() => deletar(item.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
-                            onMouseEnter={e => { e.target.style.borderColor = '#F87171'; e.target.style.color = '#F87171' }}
-                            onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.color = '#6B6B8A' }}>
-                            Deletar
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => setEditando(item)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#34D399', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                              onMouseEnter={e => { e.target.style.background = 'rgba(52,211,153,0.1)' }}
+                              onMouseLeave={e => { e.target.style.background = 'none' }}>
+                              Editar
+                            </button>
+                            <button onClick={() => deletar(item.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                              onMouseEnter={e => { e.target.style.borderColor = '#F87171'; e.target.style.color = '#F87171' }}
+                              onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.color = '#6B6B8A' }}>
+                              Deletar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -321,9 +476,7 @@ function RendaFixa() {
                 <tfoot>
                   <tr style={{ borderTop: '2px solid #2D2D42', background: '#0F0F14' }}>
                     <td colSpan={2} style={{ padding: '14px 16px', fontSize: '13px', color: '#6B6B8A', fontWeight: '600' }}>Total</td>
-                    <td style={{ padding: '14px 16px', fontSize: '16px', fontWeight: '800', color: '#34D399' }}>
-                      {fmt(resumo?.total ?? 0)}
-                    </td>
+                    <td style={{ padding: '14px 16px', fontSize: '16px', fontWeight: '800', color: '#34D399' }}>{fmt(resumo?.total ?? 0)}</td>
                     <td colSpan={5} />
                   </tr>
                 </tfoot>

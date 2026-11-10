@@ -16,6 +16,9 @@ const TOOLTIPS = {
   custodiante: 'Banco responsável pela custódia das suas ações. Necessário para declarar no Imposto de Renda.',
 }
 
+const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+const fmtQtd = (v) => v % 1 === 0 ? v.toFixed(0) : v.toFixed(4)
+
 function InfoTooltip({ texto }) {
   const [hover, setHover] = useState(false)
   return (
@@ -31,31 +34,36 @@ function InfoTooltip({ texto }) {
   )
 }
 
-function ModalHistorico({ ticker, compras, onClose, onDeletar }) {
-  const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+function ModalHistorico({ ticker, compras, onClose, onEditar, onDeletar }) {
+  const ordenadas = [...compras].sort((a, b) => b.data_compra.localeCompare(a.data_compra))
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
-      <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '20px', padding: '24px', maxWidth: '520px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '20px', padding: '24px', maxWidth: '560px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
           <div style={{ fontSize: '18px', fontWeight: '700', color: '#E8E8F0' }}>📋 Histórico — {ticker}</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6B6B8A', cursor: 'pointer', fontSize: '20px' }}>✕</button>
         </div>
+        <div style={{ fontSize: '12px', color: '#6B6B8A', marginBottom: '16px' }}>Errou algum valor? Clique em Editar para corrigir a compra.</div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {compras.map((c, i) => (
-            <div key={c.id} style={{ padding: '12px 0', borderBottom: i < compras.length - 1 ? '1px solid #1E1E2E' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
+          {ordenadas.map((c, i) => (
+            <div key={c.id} style={{ padding: '12px 0', borderBottom: i < ordenadas.length - 1 ? '1px solid #1E1E2E' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '14px', fontWeight: '500', color: '#E8E8F0', marginBottom: '4px' }}>
-                  {c.quantidade} cotas × {fmt(c.preco_pago)}
+                  {fmtQtd(c.quantidade)} cotas × {fmt(c.preco_pago)}
                 </div>
                 <div style={{ fontSize: '12px', color: '#6B6B8A' }}>
                   {new Date(c.data_compra + 'T00:00:00').toLocaleDateString('pt-BR')}
                   {c.corretora && ` · ${c.corretora}`}
                 </div>
+                {c.observacao && <div style={{ fontSize: '11px', color: '#6B6B8A', marginTop: '3px', fontStyle: 'italic' }}>📝 {c.observacao}</div>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#A78BFA' }}>{fmt(c.quantidade * c.preco_pago)}</div>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#A78BFA', marginRight: '4px' }}>{fmt(c.quantidade * c.preco_pago)}</div>
+                <button onClick={() => onEditar(c)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#A78BFA', cursor: 'pointer', fontSize: '11px', padding: '4px 8px', borderRadius: '6px' }}
+                  onMouseEnter={e => { e.target.style.background = 'rgba(167,139,250,0.1)' }}
+                  onMouseLeave={e => { e.target.style.background = 'none' }}>
+                  Editar
+                </button>
                 <button onClick={() => onDeletar(c.id)} style={{ background: 'none', border: '1px solid #2D2D42', color: '#6B6B8A', cursor: 'pointer', fontSize: '11px', padding: '4px 8px', borderRadius: '6px' }}
                   onMouseEnter={e => { e.target.style.borderColor = '#F87171'; e.target.style.color = '#F87171' }}
                   onMouseLeave={e => { e.target.style.borderColor = '#2D2D42'; e.target.style.color = '#6B6B8A' }}>
@@ -70,23 +78,143 @@ function ModalHistorico({ ticker, compras, onClose, onDeletar }) {
   )
 }
 
+function ModalEditarCompra({ compra, metas, onClose, onSalvo }) {
+  const [form, setForm] = useState({
+    ticker: compra.ticker,
+    tipo: compra.tipo || 'acao',
+    quantidade: String(compra.quantidade),
+    preco_pago: String(compra.preco_pago),
+    data_compra: compra.data_compra,
+    corretora: compra.corretora || '',
+    observacao: compra.observacao || '',
+    meta_id: compra.meta_id ? String(compra.meta_id) : '',
+  })
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+
+  // Mantém a meta atual na lista mesmo que não esteja mais "ativa"
+  const metasDisponiveis = metas.filter(m => m.status === 'ativa' || m.id === compra.meta_id)
+
+  const salvar = async () => {
+    if (!form.ticker.trim() || !form.quantidade || !form.preco_pago || !form.data_compra) {
+      setErro('Preencha ticker, quantidade, preço e data')
+      return
+    }
+    setLoading(true)
+    setErro('')
+    try {
+      await api.put(`/acoes/${compra.id}`, {
+        ticker: form.ticker.toUpperCase().trim(),
+        tipo: form.tipo,
+        quantidade: parseFloat(form.quantidade),
+        preco_pago: parseFloat(form.preco_pago),
+        data_compra: form.data_compra,
+        corretora: form.corretora || null,
+        observacao: form.observacao || null,
+        meta_id: form.meta_id ? parseInt(form.meta_id) : null,
+      })
+      onSalvo()
+    } catch (e) {
+      setErro(e.response?.data?.detail ?? 'Não foi possível salvar as alterações')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
+      <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '20px', padding: '24px', maxWidth: '520px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: '18px', fontWeight: '700', color: '#E8E8F0', marginBottom: '20px' }}>✏️ Editar compra</div>
+
+        <div style={{ marginBottom: '14px' }}>
+          <label style={labelStyle}>Tipo de ativo</label>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
+            {TIPOS.map(t => (
+              <button key={t} onClick={() => setForm({ ...form, tipo: t })} style={{
+                padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '13px', flex: '1',
+                background: form.tipo === t ? TIPO_BG[t] : '#1E1E2E',
+                color: form.tipo === t ? TIPO_COR[t] : '#6B6B8A',
+                outline: form.tipo === t ? `1px solid ${TIPO_COR[t]}` : 'none',
+              }}>{TIPO_LABEL[t]}</button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+          <div>
+            <label style={labelStyle}>Ticker</label>
+            <input value={form.ticker} onChange={e => setForm({ ...form, ticker: e.target.value.toUpperCase() })}
+              style={{ ...inputStyle, marginTop: '6px', fontWeight: '700', letterSpacing: '1px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Data da compra</label>
+            <input type="date" value={form.data_compra} onChange={e => setForm({ ...form, data_compra: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Quantidade</label>
+            <input type="number" step="any" value={form.quantidade} onChange={e => setForm({ ...form, quantidade: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Preço por unidade</label>
+            <input type="number" step="any" value={form.preco_pago} onChange={e => setForm({ ...form, preco_pago: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Corretora</label>
+            <input value={form.corretora} onChange={e => setForm({ ...form, corretora: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Observação</label>
+            <input value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} style={{ ...inputStyle, marginTop: '6px' }} />
+          </div>
+          <div style={{ gridColumn: 'span 2' }}>
+            <label style={labelStyle}>Meta vinculada</label>
+            <select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })}
+              style={{ ...inputStyle, marginTop: '6px', color: form.meta_id ? '#E8E8F0' : '#6B6B8A' }}>
+              <option value="">Nenhuma — só conta no patrimônio</option>
+              {metasDisponiveis.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {form.quantidade && form.preco_pago && (
+          <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '13px', color: '#A0A0C0' }}>Total desta compra</span>
+            <span style={{ fontSize: '15px', fontWeight: '700', color: '#A78BFA' }}>{fmt((parseFloat(form.quantidade) || 0) * (parseFloat(form.preco_pago) || 0))}</span>
+          </div>
+        )}
+
+        {erro && (
+          <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '8px', padding: '10px', marginBottom: '10px', fontSize: '13px', color: '#F87171' }}>{erro}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #2D2D42', background: 'none', color: '#6B6B8A', cursor: 'pointer' }}>Cancelar</button>
+          <button onClick={salvar} disabled={loading} style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #7C3AED, #A78BFA)', color: '#fff', fontWeight: '600', cursor: 'pointer' }}>
+            {loading ? 'Salvando...' : 'Salvar alterações'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Acoes() {
   const [carteira, setCarteira] = useState(null)
+  const [metas, setMetas] = useState([])
   const [tickerInfo, setTickerInfo] = useState(null)
   const [modalHistorico, setModalHistorico] = useState(null)
+  const [editando, setEditando] = useState(null)
   const [loading, setLoading] = useState(false)
   const [abaAtiva, setAbaAtiva] = useState('carteira')
   const [form, setForm] = useState({
-  ticker: '', tipo: 'acao', quantidade: '', preco_pago: '',
-  data_compra: '', corretora: '', observacao: '', meta_id: ''
-})
-  const [metas, setMetas] = useState([])
+    ticker: '', tipo: 'acao', quantidade: '', preco_pago: '',
+    data_compra: '', corretora: '', observacao: '', meta_id: ''
+  })
   const { isMobile } = useWindowSize()
 
   const carregar = () => {
-  api.get('/acoes/carteira').then(r => setCarteira(r.data))
-  api.get('/metas').then(r => setMetas(r.data.filter(m => m.status === 'ativa')))
-}
+    api.get('/acoes/carteira').then(r => setCarteira(r.data))
+    api.get('/metas').then(r => setMetas(r.data))
+  }
 
   useEffect(() => { carregar() }, [])
 
@@ -111,8 +239,10 @@ function Acoes() {
       quantidade: parseFloat(form.quantidade),
       preco_pago: parseFloat(form.preco_pago),
       meta_id: form.meta_id ? parseInt(form.meta_id) : null,
+      corretora: form.corretora || null,
+      observacao: form.observacao || null,
     })
-    setForm({ ticker: '', tipo: 'acao', quantidade: '', preco_pago: '', data_compra: '', corretora: '', observacao: '' })
+    setForm({ ticker: '', tipo: 'acao', quantidade: '', preco_pago: '', data_compra: '', corretora: '', observacao: '', meta_id: '' })
     setTickerInfo(null)
     carregar()
     setLoading(false)
@@ -121,14 +251,13 @@ function Acoes() {
   const deletarCompra = async (id) => {
     if (!window.confirm('Deletar esta compra?')) return
     await api.delete(`/acoes/${id}`)
-    carregar()
     setModalHistorico(null)
+    carregar()
   }
 
-  const fmt = (v) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-  const fmtQtd = (v) => v % 1 === 0 ? v.toFixed(0) : v.toFixed(4)
   const padding = isMobile ? '16px' : '32px'
   const gridForm = isMobile ? '1fr' : 'repeat(3, 1fr)'
+  const metasAtivas = metas.filter(m => m.status === 'ativa')
 
   return (
     <div style={{ padding, maxWidth: '1100px', margin: '0 auto' }}>
@@ -138,7 +267,17 @@ function Acoes() {
           ticker={modalHistorico.ticker}
           compras={modalHistorico.compras}
           onClose={() => setModalHistorico(null)}
-          onDeletar={(id) => { deletarCompra(id); setModalHistorico(null) }}
+          onEditar={(c) => { setModalHistorico(null); setEditando(c) }}
+          onDeletar={deletarCompra}
+        />
+      )}
+
+      {editando && (
+        <ModalEditarCompra
+          compra={editando}
+          metas={metas}
+          onClose={() => setEditando(null)}
+          onSalvo={() => { setEditando(null); carregar() }}
         />
       )}
 
@@ -148,16 +287,12 @@ function Acoes() {
         <p style={{ color: '#6B6B8A', fontSize: '13px', marginTop: '4px' }}>Acompanhe suas ações, FIIs e ETFs com preço médio automático</p>
       </div>
 
-      {/* Card total da carteira */}
+      {/* Card total */}
       {carteira && (
         <div style={{ background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)', borderRadius: '16px', padding: '16px 20px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>
-              Total investido em renda variável
-            </div>
-            <div style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: '800', color: '#A78BFA', letterSpacing: '-1px' }}>
-              {fmt(carteira.total_carteira)}
-            </div>
+            <div style={{ fontSize: '11px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Total investido em renda variável</div>
+            <div style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: '800', color: '#A78BFA', letterSpacing: '-1px' }}>{fmt(carteira.total_carteira)}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '13px', color: '#6B6B8A' }}>{carteira.ativos?.length ?? 0} ativo(s) na carteira</div>
@@ -180,14 +315,11 @@ function Acoes() {
         ))}
       </div>
 
-      {/* Aba nova compra */}
+      {/* Nova compra */}
       {abaAtiva === 'nova-compra' && (
         <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: isMobile ? '16px' : '24px', marginBottom: '20px' }}>
-          <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '20px' }}>
-            Registrar compra
-          </div>
+          <div style={{ fontSize: '13px', color: '#6B6B8A', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '20px' }}>Registrar compra</div>
 
-          {/* Tipo */}
           <div style={{ marginBottom: '16px' }}>
             <label style={labelStyle}>Tipo de ativo <InfoTooltip texto={TOOLTIPS.tipo} /></label>
             <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
@@ -249,7 +381,7 @@ function Acoes() {
               <select value={form.meta_id} onChange={e => setForm({ ...form, meta_id: e.target.value })}
                 style={{ ...inputStyle, marginTop: '6px', color: form.meta_id ? '#E8E8F0' : '#6B6B8A' }}>
                 <option value="">Nenhuma — só conta no patrimônio</option>
-                {metas.map(m => (
+                {metasAtivas.map(m => (
                   <option key={m.id} value={m.id}>{m.titulo} — {fmt(m.valor_atual)} / {fmt(m.valor_alvo)}</option>
                 ))}
               </select>
@@ -261,7 +393,6 @@ function Acoes() {
             </div>
           </div>
 
-          {/* Preview do total */}
           {form.quantidade && form.preco_pago && (
             <div style={{ marginTop: '16px', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '10px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: '#A0A0C0' }}>Total desta compra</span>
@@ -277,7 +408,7 @@ function Acoes() {
         </div>
       )}
 
-      {/* Aba carteira */}
+      {/* Carteira */}
       {abaAtiva === 'carteira' && (
         <div>
           {!carteira || carteira.ativos?.length === 0 ? (
@@ -285,7 +416,6 @@ function Acoes() {
               Nenhum ativo na carteira ainda — registre sua primeira compra!
             </div>
           ) : isMobile ? (
-            /* Mobile: cards */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {carteira.ativos.map(ativo => (
                 <div key={ativo.ticker} style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', padding: '16px' }}>
@@ -321,13 +451,12 @@ function Acoes() {
                   </div>
                   <button onClick={() => setModalHistorico({ ticker: ativo.ticker, compras: ativo.compras })}
                     style={{ width: '100%', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', color: '#A78BFA', cursor: 'pointer', fontSize: '12px', padding: '8px', borderRadius: '8px', fontWeight: '600' }}>
-                    Ver histórico de compras ({ativo.compras.length})
+                    Histórico / Editar ({ativo.compras.length})
                   </button>
                 </div>
               ))}
             </div>
           ) : (
-            /* Desktop: tabela */
             <div style={{ background: '#13131A', border: '1px solid #1E1E2E', borderRadius: '16px', overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -368,7 +497,7 @@ function Acoes() {
                           style={{ background: 'none', border: '1px solid #2D2D42', color: '#A78BFA', cursor: 'pointer', fontSize: '12px', padding: '4px 10px', borderRadius: '6px', whiteSpace: 'nowrap' }}
                           onMouseEnter={e => { e.target.style.background = 'rgba(167,139,250,0.1)' }}
                           onMouseLeave={e => { e.target.style.background = 'none' }}>
-                          Histórico ({ativo.compras.length})
+                          Histórico / Editar ({ativo.compras.length})
                         </button>
                       </td>
                     </tr>
@@ -376,12 +505,8 @@ function Acoes() {
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: '2px solid #2D2D42', background: '#0F0F14' }}>
-                    <td colSpan={4} style={{ padding: '14px 16px', fontSize: '13px', color: '#6B6B8A', fontWeight: '600' }}>
-                      Total da carteira
-                    </td>
-                    <td style={{ padding: '14px 16px', fontSize: '16px', fontWeight: '800', color: '#A78BFA' }}>
-                      {fmt(carteira.total_carteira)}
-                    </td>
+                    <td colSpan={4} style={{ padding: '14px 16px', fontSize: '13px', color: '#6B6B8A', fontWeight: '600' }}>Total da carteira</td>
+                    <td style={{ padding: '14px 16px', fontSize: '16px', fontWeight: '800', color: '#A78BFA' }}>{fmt(carteira.total_carteira)}</td>
                     <td colSpan={3} />
                   </tr>
                 </tfoot>

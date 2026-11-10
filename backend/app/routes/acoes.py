@@ -7,7 +7,8 @@ from app.auth import get_usuario_atual
 from app.custodiantes import get_custodiante
 from pydantic import BaseModel
 from datetime import date
-from typing import Optional, List
+from typing import Optional
+import calendar
 
 router = APIRouter()
 
@@ -28,22 +29,27 @@ class AcaoResponse(AcaoCreate):
     class Config:
         from_attributes = True
 
+def ajustar_meta(db: Session, usuario_id: int, meta_id: Optional[int], delta: float):
+    """Soma (ou subtrai, se negativo) um valor no progresso da meta vinculada."""
+    if not meta_id:
+        return
+    meta = db.query(Meta).filter(Meta.id == meta_id, Meta.usuario_id == usuario_id).first()
+    if not meta or meta.status in ("encerrada", "resgatada"):
+        return
+    meta.valor_atual = max(0, meta.valor_atual + delta)
+    if meta.valor_atual >= meta.valor_alvo:
+        meta.concluida = True
+        meta.status = "concluida"
+    elif meta.status == "concluida":
+        meta.concluida = False
+        meta.status = "ativa"
+
 @router.post("/", response_model=AcaoResponse)
 def criar_compra(acao: AcaoCreate, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
     db_acao = Acao(**acao.model_dump(), usuario_id=usuario.id)
     db_acao.ticker = db_acao.ticker.upper().strip()
     db.add(db_acao)
-
-    # Atualiza meta vinculada se houver
-    if acao.meta_id:
-        meta = db.query(Meta).filter(Meta.id == acao.meta_id, Meta.usuario_id == usuario.id).first()
-        if meta:
-            valor_compra = acao.quantidade * acao.preco_pago
-            meta.valor_atual += valor_compra
-            if meta.valor_atual >= meta.valor_alvo:
-                meta.concluida = True
-                meta.status = "concluida"
-
+    ajustar_meta(db, usuario.id, acao.meta_id, acao.quantidade * acao.preco_pago)
     db.commit()
     db.refresh(db_acao)
     return db_acao
@@ -72,10 +78,13 @@ def carteira_consolidada(db: Session = Depends(get_db), usuario=Depends(get_usua
         carteira[ticker]["total_investido"] += c.quantidade * c.preco_pago
         carteira[ticker]["compras"].append({
             "id": c.id,
+            "ticker": ticker,
+            "tipo": c.tipo,
             "quantidade": c.quantidade,
             "preco_pago": c.preco_pago,
             "data_compra": c.data_compra.isoformat(),
             "corretora": c.corretora,
+            "observacao": c.observacao,
             "meta_id": c.meta_id,
         })
 
@@ -99,9 +108,7 @@ def carteira_consolidada(db: Session = Depends(get_db), usuario=Depends(get_usua
 
 @router.get("/resumo-mes")
 def resumo_mes_acoes(mes: int, ano: int, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
-    from datetime import date
     inicio = date(ano, mes, 1)
-    import calendar
     fim = date(ano, mes, calendar.monthrange(ano, mes)[1])
     compras = db.query(Acao).filter(
         Acao.usuario_id == usuario.id,
@@ -117,9 +124,7 @@ def evolucao_acoes(db: Session = Depends(get_db), usuario=Depends(get_usuario_at
     meses = {}
     for c in compras:
         chave = c.data_compra.strftime("%Y-%m")
-        if chave not in meses:
-            meses[chave] = 0
-        meses[chave] += c.quantidade * c.preco_pago
+        meses[chave] = meses.get(chave, 0) + c.quantidade * c.preco_pago
 
     resultado = []
     acumulado = 0
@@ -132,22 +137,32 @@ def evolucao_acoes(db: Session = Depends(get_db), usuario=Depends(get_usuario_at
 def buscar_custodiante(ticker: str):
     return get_custodiante(ticker)
 
+@router.put("/{id}", response_model=AcaoResponse)
+def atualizar_compra(id: int, dados: AcaoCreate, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
+    acao = db.query(Acao).filter(Acao.id == id, Acao.usuario_id == usuario.id).first()
+    if not acao:
+        raise HTTPException(status_code=404, detail="Compra nao encontrada")
+    if dados.quantidade <= 0 or dados.preco_pago <= 0:
+        raise HTTPException(status_code=400, detail="Quantidade e preco devem ser maiores que zero")
+
+    # Desfaz o efeito antigo na meta, aplica os novos dados e soma o novo valor
+    ajustar_meta(db, usuario.id, acao.meta_id, -(acao.quantidade * acao.preco_pago))
+    for campo, valor in dados.model_dump().items():
+        setattr(acao, campo, valor)
+    acao.ticker = acao.ticker.upper().strip()
+    ajustar_meta(db, usuario.id, acao.meta_id, acao.quantidade * acao.preco_pago)
+
+    db.commit()
+    db.refresh(acao)
+    return acao
+
 @router.delete("/{id}")
 def deletar_compra(id: int, db: Session = Depends(get_db), usuario=Depends(get_usuario_atual)):
     acao = db.query(Acao).filter(Acao.id == id, Acao.usuario_id == usuario.id).first()
     if not acao:
         raise HTTPException(status_code=404, detail="Compra nao encontrada")
 
-    # Reverte valor na meta se houver
-    if acao.meta_id:
-        meta = db.query(Meta).filter(Meta.id == acao.meta_id, Meta.usuario_id == usuario.id).first()
-        if meta:
-            valor = acao.quantidade * acao.preco_pago
-            meta.valor_atual = max(0, meta.valor_atual - valor)
-            meta.concluida = meta.valor_atual >= meta.valor_alvo
-            if meta.status == "concluida" and meta.valor_atual < meta.valor_alvo:
-                meta.status = "ativa"
-
+    ajustar_meta(db, usuario.id, acao.meta_id, -(acao.quantidade * acao.preco_pago))
     db.delete(acao)
     db.commit()
     return {"mensagem": "Compra deletada com sucesso"}
